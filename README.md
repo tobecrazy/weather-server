@@ -83,6 +83,13 @@ Configuration priority:
 
 When running in SSE mode, if the specified port is already in use, the server will automatically try the next 4 consecutive ports. For example, if port 3031 is in use, it will try ports 3032, 3033, 3034, and 3035. If all ports are in use, it will display an error message with suggestions.
 
+The port auto-retry mechanism is implemented in the `transport/sse.js` file. When the server encounters a port that's already in use, it will:
+
+1. Log a message indicating that it's trying the next port
+2. Update the port number to the next available port in the retry list
+3. Attempt to start the server again with the new port
+4. If all ports are in use, it will display a helpful error message with suggestions
+
 ### Troubleshooting Port Conflicts
 
 If you encounter port conflicts when running in SSE mode, you can use the included `showPort.sh` script to identify and manage processes using the ports:
