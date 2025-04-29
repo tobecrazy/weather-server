@@ -190,28 +190,32 @@ export function createSseTransport(options = {}) {
   
   // Define retry ports - try a few ports above the configured one
   const basePort = transport.port;
-  const retryPorts = [
+  transport.retryPorts = [
     basePort + 1,
     basePort + 2,
     basePort + 3,
     basePort + 4
   ];
   
-  // Start the transport server with retry ports
-  transport.start(retryPorts).catch(error => {
-    if (error.code === 'EADDRINUSE') {
-      console.error(`All ports (${basePort}-${basePort + 4}) are already in use.`);
-      console.error('Please try one of the following:');
-      console.error(`1. Set a different port in .env or config.json`);
-      console.error(`2. Run with a different port: PORT=${basePort + 10} MCP_MODE=sse node index.js`);
-      console.error(`3. Use stdio mode instead: MCP_MODE=stdio node index.js`);
-      console.error(`4. Stop the processes using these ports and try again`);
-      console.error(`   You can find processes using these ports with: lsof -i :${basePort}`);
-    } else {
-      console.error('Failed to start SSE transport:', error);
+  // Add a custom start method that uses retry ports
+  const originalStart = transport.start;
+  transport.start = async function() {
+    try {
+      // Call the original start method with retry ports
+      return await originalStart.call(this, this.retryPorts);
+    } catch (error) {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`All ports (${basePort}-${basePort + 4}) are already in use.`);
+        console.error('Please try one of the following:');
+        console.error(`1. Set a different port in .env or config.json`);
+        console.error(`2. Run with a different port: PORT=${basePort + 10} MCP_MODE=sse node index.js`);
+        console.error(`3. Use stdio mode instead: MCP_MODE=stdio node index.js`);
+        console.error(`4. Stop the processes using these ports and try again`);
+        console.error(`   You can find processes using these ports with: lsof -i :${basePort}`);
+      }
+      throw error;
     }
-    process.exit(1);
-  });
+  };
   
   return transport;
 }
