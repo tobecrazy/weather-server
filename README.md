@@ -4,6 +4,8 @@ A Model Context Protocol (MCP) server that provides weather forecast data using 
 
 This project implements a local Node.js MCP server that connects to OpenWeatherMap API to retrieve weather data for any city (including international cities) for a specified number of days. The implementation includes a custom MCP server that doesn't require external SDK dependencies.
 
+The project also includes a Python-based agent using Google's Agent Development Kit (ADK) that can answer questions about weather and time in specific cities.
+
 ## ✨ Features
 
 - 🌍 Fetch current weather data for any city worldwide
@@ -14,10 +16,12 @@ This project implements a local Node.js MCP server that connects to OpenWeatherM
   - `sse` mode for web-based interaction
 - 🔌 Easy integration with MCP-compatible clients
 - ⚙️ Flexible configuration via environment variables or JSON file
+- 🤖 AI-powered agent using Google ADK for natural language weather and time queries
 
 ## 🛠 Prerequisites
 
 - Node.js 18 or higher
+- Python 3.9 or higher (for Google ADK integration)
 - OpenWeatherMap API key ([Get one here](https://openweathermap.org/api))
 
 ## 📁 Project Structure
@@ -30,7 +34,11 @@ weather-server/
 ├── transport/
 │   ├── stdio.js            # Stdio transport implementation
 │   └── sse.js              # SSE transport implementation
-├── package.json            # Project dependencies
+├── multi_tool_agent/       # Google ADK integration
+│   ├── __init__.py         # Python package initialization
+│   └── agent.py            # Google ADK agent implementation
+├── package.json            # Node.js project dependencies
+├── requirements.txt        # Python dependencies
 ├── README.md               # Documentation
 ├── .env.example            # Environment variables example
 ├── config.json.example     # JSON configuration example
@@ -45,12 +53,17 @@ weather-server/
    cd weather-server
    ```
 
-2. Install dependencies:
+2. Install Node.js dependencies:
    ```bash
    npm install
    ```
 
-3. Configure your OpenWeatherMap API key:
+3. Install Python dependencies (for Google ADK):
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Configure your OpenWeatherMap API key:
    - Create a `.env` file in the project root (copy from `.env.example`):
      ```
      OPENWEATHERMAP_API_KEY=your_api_key_here
@@ -190,6 +203,62 @@ This project includes a custom MCP server implementation that:
 
 ## 📚 API Reference
 
+### Google ADK Integration
+
+This project includes a Python-based agent built with Google's Agent Development Kit (ADK) that can answer natural language questions about weather and time in specific cities.
+
+#### Setting Up the Google ADK Agent
+
+1. Make sure you have installed the Google ADK:
+   ```bash
+   pip install google-adk
+   ```
+
+2. The agent is defined in `multi_tool_agent/agent.py` and uses the Gemini 2.0 Flash model.
+
+3. The agent provides two main functions:
+   - `get_weather`: Returns weather information for a specified city
+   - `get_current_time`: Returns the current time in a specified city
+
+#### Using the Google ADK Agent
+
+You can interact with the Google ADK agent programmatically:
+
+```python
+from multi_tool_agent.agent import root_agent
+
+# Get a response from the agent
+response = root_agent.generate_content("What's the weather like in New York?")
+print(response.text)
+
+# Or use the agent's tools directly
+from multi_tool_agent.agent import get_weather, get_current_time
+
+weather_info = get_weather("New York")
+time_info = get_current_time("New York")
+```
+
+#### Running the ADK Web Interface
+
+To test and interact with your agent through a web interface:
+
+1. Set the SSL certificate file environment variable (required for voice and video tests):
+   ```bash
+   export SSL_CERT_FILE=$(python -m certifi)
+   ```
+
+2. Run the ADK web interface:
+   ```bash
+   adk web
+   ```
+
+3. Open the URL provided (usually http://localhost:8000 or http://127.0.0.1:8000) in your browser.
+   This connection stays entirely on your local machine.
+
+4. Select the agent you want to interact with (e.g., `weather_time_agent`).
+
+The web interface provides a convenient way to test your agent's responses to different queries and see how it handles various inputs without writing any code.
+
 ### Tool: `get_forecast`
 
 Get weather forecast for a city for a specified number of days.
@@ -316,3 +385,4 @@ ISC
 
 - [OpenWeatherMap API](https://openweathermap.org/api) for providing weather data
 - [Model Context Protocol](https://modelcontext.org) for the MCP specification
+- [Google Agent Development Kit (ADK)](https://github.com/google/agent-development-kit) for AI agent capabilities
