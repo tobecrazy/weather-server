@@ -80,7 +80,7 @@ docker run -p 3900:3900 -e OPENWEATHERMAP_API_KEY=your_api_key_here weather-serv
 
 ## About the Docker Setup
 
-This Docker setup uses a minimal Alpine approach that doesn't rely on Node.js images from external registries. The `Dockerfile.minimal` uses a basic Alpine image and installs Node.js directly from Alpine's package repositories. This approach is reliable as it only requires access to the Alpine base image, which is widely mirrored and cached.
+This Docker setup uses a Node.js image directly. The `Dockerfile.minimal` is configured to use the `node:lts` image, which assumes you have Node.js Docker images available locally. This approach is simpler and more efficient than installing Node.js on a base Alpine image.
 
 ## Troubleshooting
 
