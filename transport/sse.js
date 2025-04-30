@@ -167,7 +167,11 @@ export class SseServerTransport extends EventEmitter {
         
         // Emit the message event for the MCP server to handle
         this.emit('message', message, (response) => {
+          // Send response to the HTTP client
           res.end(JSON.stringify(response));
+          
+          // Also broadcast the response to all SSE clients
+          this.send(response);
         });
       } catch (error) {
         console.error('Error processing MCP request:', error);
