@@ -1,0 +1,30 @@
+# Minimal Dockerfile that doesn't rely on Node.js images from external registries
+# This is useful when you have network issues accessing Docker Hub or other registries
+
+FROM alpine:latest
+
+# Install Node.js and npm
+RUN apk add --no-cache nodejs npm
+
+# Create app directory
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application code
+COPY . .
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV MCP_MODE=sse
+ENV HOST=0.0.0.0
+
+# Expose the port the app runs on
+EXPOSE 3900
+
+# Command to run the application
+CMD ["node", "index.js"]
