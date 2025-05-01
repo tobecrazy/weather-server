@@ -1,0 +1,13 @@
+# OpenWeatherMap API Configuration
+# Get your API key from: https://home.openweathermap.org/api_keys
+apikey: your api key
+
+# Server transport mode
+# Options:
+#   - stdio: Standard input/output mode (default, good for CLI usage)
+#   - sse: Server-Sent Events mode (HTTP server mode)
+mode: sse
+
+# Default city to use when no city is specified in requests
+# Format: City name, optionally with country code (e.g., "London,uk")
+default_city: Beijing,cn

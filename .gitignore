@@ -9,6 +9,7 @@ yarn.lock
 
 # Configuration
 config.json
+config.yaml
 
 # Logs
 logs/
