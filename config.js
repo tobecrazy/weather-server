@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 const defaultConfig = {
   apiKey: process.env.OPENWEATHERMAP_API_KEY || '',
   mode: process.env.MCP_MODE || 'stdio', // 'stdio' or 'sse'
-  port: process.env.PORT || 3031, // Port for SSE server
+  port: process.env.PORT || 3900, // Port for SSE server
   host: process.env.HOST || 'localhost' // Host for SSE server
 };
 
