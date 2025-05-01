@@ -1,5 +1,4 @@
 import { createStdioTransport } from './transport/stdio.js';
-import { createSseTransport } from './transport/sse.js';
 import { getWeather } from './weather.js';
 import config from './config.js';
 
@@ -99,18 +98,8 @@ async function startServer() {
   try {
     let transport;
     
-    // Select transport based on configuration
-    if (config.mode === 'sse') {
-      try {
-        transport = createSseTransport();
-      } catch (error) {
-        console.error('Failed to create SSE transport:', error);
-        console.log('Falling back to stdio transport...');
-        transport = createStdioTransport();
-      }
-    } else {
-      transport = createStdioTransport();
-    }
+    // Create stdio transport
+    transport = createStdioTransport();
     
     // Create MCP server with the selected transport
     const server = new SimpleMcpServer({
@@ -168,7 +157,7 @@ async function startServer() {
     });
     
     // Log server information
-    console.log(`Starting weather-server in ${config.mode} mode`);
+    console.log('Starting weather-server in stdio mode');
     
     if (!config.apiKey) {
       console.warn('WARNING: OpenWeatherMap API key is not set. API requests will fail.');

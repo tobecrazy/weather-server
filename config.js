@@ -11,10 +11,7 @@ const __dirname = dirname(__filename);
 
 // Default configuration
 const defaultConfig = {
-  apiKey: process.env.OPENWEATHERMAP_API_KEY || '',
-  mode: process.env.MCP_MODE || 'stdio', // 'stdio' or 'sse'
-  port: process.env.PORT || 3900, // Port for SSE server
-  host: process.env.HOST || 'localhost' // Host for SSE server
+  apiKey: process.env.OPENWEATHERMAP_API_KEY || ''
 };
 
 // Try to load config from file if it exists
@@ -36,10 +33,7 @@ const config = {
   ...defaultConfig,
   ...fileConfig,
   // Override with environment variables if they exist
-  apiKey: process.env.OPENWEATHERMAP_API_KEY || fileConfig.apiKey || defaultConfig.apiKey,
-  mode: process.env.MCP_MODE || fileConfig.mode || defaultConfig.mode,
-  port: process.env.PORT || fileConfig.port || defaultConfig.port,
-  host: process.env.HOST || fileConfig.host || defaultConfig.host
+  apiKey: process.env.OPENWEATHERMAP_API_KEY || fileConfig.apiKey || defaultConfig.apiKey
 };
 
 // Validate required configuration

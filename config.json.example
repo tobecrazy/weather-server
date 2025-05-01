@@ -1,6 +1,4 @@
 {
   "apiKey": "your_api_key_here",
-  "mode": "stdio",
-  "port": 3031,
-  "host": "localhost"
+  "mode": "stdio"
 }

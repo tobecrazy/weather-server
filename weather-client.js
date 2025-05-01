@@ -16,28 +16,13 @@ import config from './config.js';
 async function use_mcp_tool(params) {
   const { server_name, tool_name, arguments: args } = params;
   
-  // 从配置中获取主机和端口
-  const host = config.host || 'localhost';
-  const port = config.port || 3031;
+  // 在此示例中，我们直接返回一个模拟响应
+  // 实际应用中，这里会通过 MCP 框架与服务器通信
+  console.log(`调用工具: ${tool_name}，参数:`, args);
   
-  // 对于 SSE 模式，我们需要向服务器发送 HTTP 请求
-  const response = await fetch(`http://${host}:${port}/mcp`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      type: 'tool',
-      tool: tool_name,
-      params: args
-    })
-  });
-  
-  if (!response.ok) {
-    throw new Error(`HTTP 错误! 状态码: ${response.status}`);
-  }
-  
-  return await response.json();
+  // 这里应该是通过 stdio 与服务器通信
+  // 但为了简化示例，我们直接返回一个错误
+  throw new Error('请通过 MCP 框架运行此客户端');
 }
 
 /**
@@ -95,7 +80,7 @@ async function getWeatherForecast(city, country, days) {
     });
     
     console.log('数据来源: OpenWeatherMap API');
-    console.log('通过 MCP 天气服务器获取');
+    console.log('通过 MCP 天气服务器获取 (stdio 模式)');
     
   } catch (error) {
     console.error('获取天气数据时出错:', error.message);
