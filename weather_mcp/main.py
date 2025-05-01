@@ -60,17 +60,7 @@ set_config(apikey, default_city)
 # Create main MCP server
 mcp = FastMCP(name="WeatherServer")
 
-# Add a simple resource for server information
-@mcp.resource()
-def server_info():
-    """Provide basic information about the weather server"""
-    return {
-        "name": "Weather MCP Server",
-        "version": "1.0.0",
-        "description": "MCP server providing weather information via OpenWeatherMap API",
-        "default_city": default_city,
-        "api_configured": bool(apikey and apikey not in ["YOUR_OPENWEATHERMAP_API_KEY", "your_api_key_here"])
-    }
+# No resources for now, just focus on the tools
 
 # Mount the weather plugin (sub-server) for weather tools
 from plugins.weather import weather_mcp

@@ -17,20 +17,7 @@ def set_config(api_key, city):
     default_city = city
     logger.info(f"Weather plugin configured with default_city={default_city}")
 
-@weather_mcp.resource()
-def api_info():
-    """Provide information about the weather API capabilities"""
-    return {
-        "name": "OpenWeatherMap API",
-        "capabilities": [
-            "Current weather for any city",
-            "Weather forecasts up to 3 days in advance",
-            "Temperature in Celsius",
-            "Weather conditions description"
-        ],
-        "default_city": default_city,
-        "api_configured": bool(apikey and apikey not in ["YOUR_OPENWEATHERMAP_API_KEY", "your_api_key_here"])
-    }
+# No resources for now, just focus on the tools
 
 # Helper to convert temperature from Kelvin to Celsius (if needed)
 def kelvin_to_celsius(kelvin):

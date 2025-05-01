@@ -222,48 +222,9 @@ The server provides a single tool: `weather.get_weather`
 }
 ```
 
-#### Resources
+#### Note on Resources
 
-The server provides the following resources:
-
-1. `server_info`: Basic information about the Weather MCP Server
-   ```json
-   {
-     "name": "Weather MCP Server",
-     "version": "1.0.0",
-     "description": "MCP server providing weather information via OpenWeatherMap API",
-     "default_city": "Beijing,cn",
-     "api_configured": true
-   }
-   ```
-
-2. `weather.api_info`: Information about the weather API capabilities
-   ```json
-   {
-     "name": "OpenWeatherMap API",
-     "capabilities": [
-       "Current weather for any city",
-       "Weather forecasts up to 3 days in advance",
-       "Temperature in Celsius",
-       "Weather conditions description"
-     ],
-     "default_city": "Beijing,cn",
-     "api_configured": true
-   }
-   ```
-
-You can access these resources using the MCP resources endpoint:
-
-```bash
-# List all available resources
-curl http://localhost:8000/resources/list
-
-# Get server info resource
-curl http://localhost:8000/resources/server_info
-
-# Get weather API info resource
-curl http://localhost:8000/resources/weather.api_info
-```
+This implementation focuses on the core weather tool functionality. Resources have been temporarily disabled due to compatibility issues with the current version of FastMCP.
 
 ## Error Handling
 
