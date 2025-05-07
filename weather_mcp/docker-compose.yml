@@ -8,7 +8,9 @@ services:
       - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY:-your_api_key_here}
       - MCP_TRANSPORT_MODE=sse
       - DEFAULT_CITY=${DEFAULT_CITY:-Beijing,cn}
-      - SSE_HOST=0.0.0.0  # Listen on all interfaces inside container
+      - HTTP_HOST=0.0.0.0  # Listen on all interfaces inside container
+      - HTTP_PORT=8000
+      - SSE_HOST=0.0.0.0  # Legacy settings for backward compatibility
       - SSE_PORT=8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports:

@@ -5,7 +5,8 @@ apikey: your api key
 # Server transport mode
 # Options:
 #   - stdio: Standard input/output mode (default, good for CLI usage)
-#   - sse: Server-Sent Events mode (HTTP server mode)
+#   - sse: HTTP server mode with streaming support (recommended for web clients)
+#   - streamable-http: Alias for sse mode (for backward compatibility)
 mode: sse
 
 # Default city to use when no city is specified in requests
