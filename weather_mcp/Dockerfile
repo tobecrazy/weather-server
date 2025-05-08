@@ -10,8 +10,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Default to stdio mode, can be overridden at runtime
-ENV MCP_TRANSPORT_MODE=stdio
+ENV MCP_TRANSPORT_MODE=sse
 ENV DEFAULT_CITY=Beijing,cn
+ENV HTTP_HOST=0.0.0.0
+ENV HTTP_PORT=8000
+ENV SSE_HOST=0.0.0.0
+ENV SSE_PORT=8000
 ENV LOG_LEVEL=INFO
 
 # Run the server

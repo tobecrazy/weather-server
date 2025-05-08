@@ -6,15 +6,15 @@ show_help() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  -m, --mode MODE     Set the transport mode (stdio or streamable-http, default: stdio)"
+    echo "  -m, --mode MODE     Set the transport mode (stdio or sse, default: stdio)"
     echo "  -h, --host HOST     Set the host for HTTP mode (default: 127.0.0.1)"
     echo "  -p, --port PORT     Set the port for HTTP mode (default: 8000)"
     echo "  --help              Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0                  Run in stdio mode (default)"
-    echo "  $0 -m streamable-http  Run in HTTP mode with default host and port"
-    echo "  $0 -m streamable-http -p 8080   Run in HTTP mode on port 8080"
+    echo "  $0 -m sse  Run in HTTP mode with default host and port"
+    echo "  $0 -m sse -p 8080   Run in HTTP mode on port 8080"
 }
 
 # Default values
@@ -79,16 +79,12 @@ fi
 # Run the server based on the selected mode
 echo "Starting Weather MCP Server in ${MODE} mode..."
 
-if [ "$MODE" = "sse" ] || [ "$MODE" = "streamable-http" ]; then
+if [ "$MODE" = "sse" ]; then
     echo "Server will be available at http://${HOST}:${PORT}"
     # Use the FastMCP CLI if available, otherwise fall back to direct execution
     if command -v fastmcp &> /dev/null; then
-        # Convert streamable-http to sse for FastMCP compatibility
-        if [ "$MODE" = "streamable-http" ] || [ "$MODE" = "http" ]; then
-            TRANSPORT_MODE="sse"
-        else
-            TRANSPORT_MODE="$MODE"
-        fi
+        # Set transport mode
+        TRANSPORT_MODE="sse"
         fastmcp run main.py:mcp --transport "$TRANSPORT_MODE" --host "$HOST" --port "$PORT"
     else
         # Set environment variables and run directly

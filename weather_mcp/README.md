@@ -80,10 +80,10 @@ chmod +x run_server.sh
 ./run_server.sh
 
 # Run in HTTP streaming mode
-./run_server.sh -m streamable-http
+./run_server.sh -m sse
 
 # Run in HTTP streaming mode with custom port
-./run_server.sh -m streamable-http -p 8080
+./run_server.sh -m sse -p 8080
 
 # Show help
 ./run_server.sh --help
@@ -170,17 +170,17 @@ chmod +x example_client.py
 ./example_client.py --city Tokyo --days 1
 ```
 
-#### Streamable-HTTP Client
+#### SSE Client
 
 ```bash
 # Make the script executable if needed
 chmod +x example_client_streamable.py
 
-# Connect using the streamable-http transport
-./example_client_streamable.py --transport streamable-http --host 127.0.0.1 --port 8000 --city Paris
+# Connect using the SSE transport
+./example_client_streamable.py --transport sse --host 127.0.0.1 --port 8000 --city Paris
 
 # Get tomorrow's weather for Tokyo
-./example_client_streamable.py --transport streamable-http --host 127.0.0.1 --port 8000 --city Tokyo --days 1
+./example_client_streamable.py --transport sse --host 127.0.0.1 --port 8000 --city Tokyo --days 1
 ```
 
 ### Testing the Server
@@ -197,8 +197,8 @@ chmod +x test_server.py
 # Test with a specific city
 ./test_server.py --city Tokyo
 
-# Test against a streamable-HTTP server
-./test_server.py --transport streamable-http --host 127.0.0.1 --port 8000
+# Test against an SSE server
+./test_server.py --transport sse --host 127.0.0.1 --port 8000
 ```
 
 The test script runs three tests:
@@ -276,7 +276,7 @@ The server now supports the following transport modes:
 
 1. **stdio**: Standard input/output mode (default, good for CLI usage)
 2. **sse**: HTTP server mode with streaming support (recommended for web clients)
-3. **streamable-http**: Alias for sse mode (for backward compatibility)
+3. **streamable-http**: Deprecated alias for sse mode (for backward compatibility)
 
 ### HTTP Streaming Architecture
 

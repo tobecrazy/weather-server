@@ -1,13 +1,21 @@
-from fastmcp import FastMCP
-import yaml
-import logging
+# Standard library imports
 import os
+import logging
+import json
+import asyncio
+import uuid
+
+# Third-party imports
+import yaml
+import uvicorn
+from fastmcp import FastMCP
 from dotenv import load_dotenv
 from starlette.applications import Starlette
 from starlette.routing import Route, Mount
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-import uvicorn
+from starlette.responses import StreamingResponse, JSONResponse, HTMLResponse
+from starlette.background import BackgroundTask
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -71,14 +79,7 @@ mcp = FastMCP(name="WeatherServer")
 from plugins.weather import weather_mcp
 mcp.mount("weather", weather_mcp)
 
-# Import necessary modules for HTTP streaming
-
 # Define HTTP streaming handler functions
-from starlette.responses import StreamingResponse, JSONResponse, HTMLResponse
-from starlette.background import BackgroundTask
-import asyncio
-import json
-import uuid
 
 # Global queue for streaming messages
 message_queue = asyncio.Queue()
@@ -186,7 +187,7 @@ async def handle_streaming(request):
             # Get client ID from header or generate a new one
             client_id = request.headers.get('X-Client-ID', str(uuid.uuid4()))
             
-            # Return a success response
+            # Return a success response for non-JSON-RPC requests
             return JSONResponse(
                 {"status": "success", "message": "Streaming connection established", "client_id": client_id},
                 status_code=200
@@ -232,7 +233,7 @@ async def handle_mcp_request(request):
         data = await request.json()
         logger.info(f"Received MCP request from client {client_id}: {data}")
         
-        # Process the request using the MCP server
+        # Handle MCP tool requests
         if 'tool' in data:
             tool_name = data['tool']
             args = data.get('args', {})
@@ -316,28 +317,21 @@ if __name__ == "__main__":
     logger.info(f"Starting server in {mode.upper()} mode")
     
     try:
-        if mode == 'streamable-http' or mode == 'http' or mode == 'sse':  # Support all mode names
+        if mode == 'sse':  # Support all mode names
             # Get host and port from environment or use defaults
             host = os.getenv('HTTP_HOST', os.getenv('SSE_HOST', '127.0.0.1'))
             port = int(os.getenv('HTTP_PORT', os.getenv('SSE_PORT', '8000')))
             
-            # For FastMCP compatibility, we need to use 'sse' as the transport mode
-            # But we'll use streamable-http terminology in our code and documentation
-            if mode == 'streamable-http' or mode == 'http':
-                logger.info("Using HTTP streaming mode with SSE transport")
-                mode = 'sse'  # Use 'sse' for FastMCP compatibility
+            # For FastMCP compatibility
+            logger.info("Using HTTP streaming mode with SSE transport")
                 
             logger.info(f"HTTP server will be available at http://{host}:{port}")
             
             # Create Starlette app with streaming endpoints
-            from starlette.routing import Route, Mount
-            from starlette.applications import Starlette
             
             # Create routes for streaming and MCP
             routes = [
                 Route("/", endpoint=handle_root, methods=["GET"]),             # Root path with information
-                Route("/stream", endpoint=handle_streaming, methods=["GET", "POST"]),  # Primary endpoint for streaming (POST for FastMCP client)
-                Route("/stream", endpoint=handle_options, methods=["OPTIONS"]), # OPTIONS handler for CORS preflight
                 # Legacy endpoint for backward compatibility - accept all methods
                 Route("/sse", endpoint=handle_streaming),
                 Route("/mcp", endpoint=handle_mcp_request, methods=["POST"]),
