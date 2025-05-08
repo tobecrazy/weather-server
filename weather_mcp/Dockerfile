@@ -18,5 +18,5 @@ ENV SSE_HOST=0.0.0.0
 ENV SSE_PORT=8000
 ENV LOG_LEVEL=INFO
 
-# Run the server
-CMD ["python", "main.py"]
+# Run the server using FastMCP CLI for better SSE mode support
+CMD ["fastmcp", "run", "main.py:mcp", "--transport", "sse", "--host", "0.0.0.0", "--port", "8000"]

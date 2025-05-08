@@ -313,6 +313,13 @@ async def handle_mcp_request(request):
         )
 
 if __name__ == "__main__":
+    # Log the raw value of the environment variable
+    raw_mode = os.getenv('MCP_TRANSPORT_MODE')
+    logger.info(f"MCP_TRANSPORT_MODE environment variable: {raw_mode}")
+    
+    # Log the value of the mode variable before lowercasing
+    logger.info(f"Mode variable before lowercasing: {mode}")
+    
     mode = mode.lower() if mode else 'stdio'
     logger.info(f"Starting server in {mode.upper()} mode")
     
@@ -324,10 +331,7 @@ if __name__ == "__main__":
             
             # For FastMCP compatibility
             logger.info("Using HTTP streaming mode with SSE transport")
-                
             logger.info(f"HTTP server will be available at http://{host}:{port}")
-            
-            # Create Starlette app with streaming endpoints
             
             # Create routes for streaming and MCP
             routes = [
