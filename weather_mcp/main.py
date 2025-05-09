@@ -233,8 +233,55 @@ async def handle_mcp_request(request):
         data = await request.json()
         logger.info(f"Received MCP request from client {client_id}: {data}")
         
-        # Handle MCP tool requests
-        if 'tool' in data:
+        # Handle JSON-RPC requests
+        if 'jsonrpc' in data and 'method' in data:
+            method = data['method']
+            params = data.get('params', {})
+            request_id = data.get('id', str(uuid.uuid4()))
+            
+            # Handle tools/list method
+            if method == 'tools/list':
+                # Get list of available tools
+                tools = []
+                # Add weather tools - access tools through the _tool_manager._tools attribute
+                for tool_name, tool_obj in weather_mcp._tool_manager._tools.items():
+                    tool_info = {
+                        "name": f"weather.{tool_name}",
+                        "description": tool_obj.description or "",
+                        "parameters": tool_obj.parameters if hasattr(tool_obj, 'parameters') else {}
+                    }
+                    tools.append(tool_info)
+                
+                # Create JSON-RPC response
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": tools
+                }
+                
+                # Store the response and send it via streaming
+                responses[request_id] = response
+                await message_queue.put({
+                    "client_id": client_id,
+                    "request_id": request_id,
+                    "result": tools
+                })
+                
+                return JSONResponse(response, status_code=200)
+            else:
+                # Return error for unsupported methods
+                error_response = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Method not found: {method}"
+                    }
+                }
+                return JSONResponse(error_response, status_code=404)
+                
+        # Handle MCP tool requests (non-JSON-RPC format)
+        elif 'tool' in data:
             tool_name = data['tool']
             args = data.get('args', {})
             
@@ -248,19 +295,20 @@ async def handle_mcp_request(request):
             
             server_name, tool = parts
             
-            # Get the server from the main MCP server
-            server = mcp.servers.get(server_name)
-            if not server:
+            # Handle the case for the weather server
+            if server_name == "weather":
+                server = weather_mcp
+                tool_obj = server._tool_manager._tools.get(tool)
+                if not tool_obj:
+                    return JSONResponse(
+                        {"error": f"Tool not found: {tool} in server {server_name}"},
+                        status_code=404
+                    )
+                # Get the actual function from the tool object
+                tool_func = tool_obj.fn
+            else:
                 return JSONResponse(
-                    {"error": f"Get the server from the main MCP server Server not found: {server_name}"},
-                    status_code=404
-                )
-            
-            # Get the tool from the server
-            tool_func = server.tools.get(tool)
-            if not tool_func:
-                return JSONResponse(
-                    {"error": f" Get the tool from the server, tool not found: {tool}"},
+                    {"error": f"Server not found: {server_name}"},
                     status_code=404
                 )
             
@@ -302,7 +350,7 @@ async def handle_mcp_request(request):
                 )
         else:
             return JSONResponse(
-                {"error": "Invalid request format. 'tool' field is required."},
+                {"error": "Invalid request format. Either 'jsonrpc' and 'method' or 'tool' field is required."},
                 status_code=400
             )
     except Exception as e:
