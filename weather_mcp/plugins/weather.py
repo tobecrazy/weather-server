@@ -1,6 +1,7 @@
 from fastmcp import FastMCP
 import requests
 import logging
+import asyncio
 from datetime import datetime, timedelta
 
 weather_mcp = FastMCP(name="Weather")
@@ -24,7 +25,7 @@ def kelvin_to_celsius(kelvin):
     return kelvin - 273.15
 
 @weather_mcp.tool()
-def get_weather(city: str = None, days: int = 0) -> dict:
+async def get_weather(city: str = None, days: int = 0) -> dict:
     """
     Get weather for a city and day offset (0=today/current, 1=+1 day, ... up to 3).
     Returns a dictionary with date, temperature, and weather description.
@@ -59,7 +60,12 @@ def get_weather(city: str = None, days: int = 0) -> dict:
             # Use the current weather API (free and supports city query)
             url = "https://api.openweathermap.org/data/2.5/weather"
             params = {"q": city, "appid": apikey, "units": "metric"}
-            response = requests.get(url, params=params)
+            
+            # Use asyncio to run the request in a thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, lambda: requests.get(url, params=params)
+            )
             
             if response.status_code != 200:
                 logger.error(f"OpenWeatherMap API error: {response.status_code} {response.text}")
@@ -76,13 +82,18 @@ def get_weather(city: str = None, days: int = 0) -> dict:
             # Use daily forecast API. OWM supports up to 16 days via /forecast/daily.
             url = "https://api.openweathermap.org/data/2.5/forecast/daily"
             params = {"q": city, "cnt": days+1, "appid": apikey, "units": "metric"}
-            response = requests.get(url, params=params)
+            
+            # Use asyncio to run the request in a thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, lambda: requests.get(url, params=params)
+            )
             
             if response.status_code != 200:
                 # If daily forecast API fails (it might require paid subscription),
                 # fall back to the 5-day/3-hour forecast API and aggregate
                 logger.warning("Daily forecast API failed, falling back to 5-day/3-hour forecast")
-                return get_forecast_fallback(city, days)
+                return await get_forecast_fallback_async(city, days)
                 
             data = response.json()
             
@@ -111,14 +122,19 @@ def get_weather(city: str = None, days: int = 0) -> dict:
     logger.info(f"Result: {result}")
     return result
 
-def get_forecast_fallback(city, days):
+async def get_forecast_fallback_async(city, days):
     """
     Fallback method using the 5-day/3-hour forecast API when daily forecast is unavailable.
     This is useful for free tier OpenWeatherMap accounts.
     """
     url = "https://api.openweathermap.org/data/2.5/forecast"
     params = {"q": city, "appid": apikey, "units": "metric"}
-    response = requests.get(url, params=params)
+    
+    # Use asyncio to run the request in a thread pool to avoid blocking
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None, lambda: requests.get(url, params=params)
+    )
     
     if response.status_code != 200:
         logger.error(f"Fallback API error: {response.status_code} {response.text}")
@@ -156,3 +172,15 @@ def get_forecast_fallback(city, days):
     
     logger.info(f"Fallback result: {result}")
     return result
+
+# Keep the original function for backward compatibility
+def get_forecast_fallback(city, days):
+    """
+    Synchronous version of the fallback method for backward compatibility.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(get_forecast_fallback_async(city, days))
+    finally:
+        loop.close()
