@@ -27,15 +27,15 @@ def kelvin_to_celsius(kelvin):
 @weather_mcp.tool()
 async def get_weather(city: str = None, days: int = 0) -> dict:
     """
-    Get weather for a city and day offset (0=today/current, 1=+1 day, ... up to 3).
-    Returns a dictionary with date, temperature, and weather description.
+    Get weather for a city and day offset (0=today/current, 1=+1 day, ... up to 15).
+    Returns a dictionary with date, temperature (including min/max), and weather description.
     
     Args:
         city: City name, optionally with country code (e.g., "London,uk")
-        days: Day offset (0=today/current, 1=tomorrow, 2=day after tomorrow, 3=three days from now)
+        days: Day offset (0=today/current, 1=tomorrow, ..., 15=fifteen days from now)
         
     Returns:
-        Dictionary with city, date, temperature (Celsius), and weather description
+        Dictionary with city, date, temperature (Celsius), min/max temperature, and weather description
     """
     global apikey, default_city
     
@@ -47,10 +47,10 @@ async def get_weather(city: str = None, days: int = 0) -> dict:
     try:
         days = int(days)
     except (TypeError, ValueError):
-        raise ValueError("`days` parameter must be an integer 0-3")
+        raise ValueError("`days` parameter must be an integer 0-15")
         
-    if days < 0 or days > 3:
-        raise ValueError("`days` must be between 0 and 3")
+    if days < 0 or days > 15:
+        raise ValueError("`days` must be between 0 and 15")
 
     logger.info(f"Fetching weather for city={city}, days={days}")
 
@@ -101,6 +101,8 @@ async def get_weather(city: str = None, days: int = 0) -> dict:
             entry = data["list"][days]
             date = datetime.utcfromtimestamp(entry["dt"]).strftime("%Y-%m-%d")
             temp = entry["temp"]["day"]
+            temp_min = entry["temp"]["min"]
+            temp_max = entry["temp"]["max"]
             desc = entry["weather"][0]["description"]
             
     except requests.RequestException as e:
@@ -113,12 +115,25 @@ async def get_weather(city: str = None, days: int = 0) -> dict:
         logger.error(f"Unexpected error: {str(e)}")
         raise RuntimeError(f"Error processing weather {str(e)}")
 
-    result = {
-        "city": city,
-        "date": date,
-        "temperature_C": temp,
-        "weather": desc
-    }
+    # For current weather (days=0), we need to handle min/max differently
+    if days == 0:
+        result = {
+            "city": city,
+            "date": date,
+            "temperature_C": temp,
+            "min_temperature_C": data["main"].get("temp_min", temp),
+            "max_temperature_C": data["main"].get("temp_max", temp),
+            "weather": desc
+        }
+    else:
+        result = {
+            "city": city,
+            "date": date,
+            "temperature_C": temp,
+            "min_temperature_C": temp_min,
+            "max_temperature_C": temp_max,
+            "weather": desc
+        }
     logger.info(f"Result: {result}")
     return result
 
@@ -155,9 +170,11 @@ async def get_forecast_fallback_async(city, days):
     if not day_forecasts:
         raise RuntimeError(f"No forecast data available for {target_date_str}")
     
-    # Calculate average temperature and find most common weather description
+    # Calculate average, min, and max temperature and find most common weather description
     temps = [item["main"]["temp"] for item in day_forecasts]
     avg_temp = sum(temps) / len(temps)
+    min_temp = min(item["main"]["temp_min"] for item in day_forecasts)
+    max_temp = max(item["main"]["temp_max"] for item in day_forecasts)
     
     # Find most common weather description
     descriptions = [item["weather"][0]["description"] for item in day_forecasts]
@@ -167,6 +184,8 @@ async def get_forecast_fallback_async(city, days):
         "city": city,
         "date": target_date_str,
         "temperature_C": round(avg_temp, 1),
+        "min_temperature_C": round(min_temp, 1),
+        "max_temperature_C": round(max_temp, 1),
         "weather": desc
     }
     

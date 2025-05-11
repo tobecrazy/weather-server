@@ -5,7 +5,8 @@ This project implements a local MCP (Model Context Protocol) server using FastMC
 ## Features
 
 - Get current weather for any city
-- Get weather forecasts for up to 3 days in the future
+- Get weather forecasts for up to 15 days in the future
+- Includes minimum and maximum temperature data for each forecast
 - Configurable default city and API key
 - Support for both stdio and HTTP transport modes with streaming support
 - Comprehensive error handling and logging
@@ -204,7 +205,7 @@ chmod +x test_server.py
 The test script runs three tests:
 1. Getting current weather
 2. Getting tomorrow's forecast
-3. Getting a 3-day forecast
+3. Getting a forecast for a future day (up to 15 days ahead)
 
 If all tests pass, the script exits with code 0. If any test fails, it exits with code 1.
 
@@ -217,7 +218,7 @@ The server provides a single tool: `weather.get_weather`
 ### Parameters:
 
 - `city` (optional): City name, optionally with country code (e.g., "London,uk"). If not provided, uses the default city from config.
-- `days` (optional): Day offset (0=today/current, 1=tomorrow, 2=day after tomorrow, 3=three days from now). Default is 0 (current weather).
+- `days` (optional): Day offset (0=today/current, 1=tomorrow, ..., 15=fifteen days from now). Default is 0 (current weather).
 
 ### Example Request:
 
@@ -238,6 +239,8 @@ The server provides a single tool: `weather.get_weather`
   "city": "Tokyo",
   "date": "2025-05-02",
   "temperature_C": 18.5,
+  "min_temperature_C": 15.2,
+  "max_temperature_C": 22.1,
   "weather": "clear sky"
 }
 ```
@@ -259,7 +262,9 @@ Errors are logged to `weather.log` and returned as error responses to the client
 ## Notes on OpenWeatherMap API
 
 - The free tier of OpenWeatherMap includes current weather and 5-day/3-hour forecasts.
-- This implementation attempts to use the daily forecast API (`/forecast/daily`) but falls back to the 5-day/3-hour forecast API if needed.
+- This implementation attempts to use the daily forecast API (`/forecast/daily`) which supports up to 16 days of forecasts but falls back to the 5-day/3-hour forecast API if needed.
+- For forecasts beyond 5 days, a paid OpenWeatherMap subscription may be required for the daily forecast API.
+- The implementation includes min/max temperature data for all forecasts.
 - For paid plans, the One Call API would provide more comprehensive data.
 
 ## FastAPI Compatibility
