@@ -3,6 +3,7 @@ version: '3'
 services:
   weather-mcp-server:
     build: .
+    image: weather-mcp-server:latest
     container_name: weather-mcp-server
     environment:
       - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY:-your_api_key_here}
