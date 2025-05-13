@@ -1,21 +1,12 @@
 # Standard library imports
 import os
 import logging
-import json
-import asyncio
-import uuid
+from http import HTTPStatus
 
 # Third-party imports
 import yaml
-import uvicorn
 from fastmcp import FastMCP
 from dotenv import load_dotenv
-from starlette.applications import Starlette
-from starlette.routing import Route, Mount
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import StreamingResponse, JSONResponse, HTMLResponse
-from starlette.background import BackgroundTask
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -73,6 +64,98 @@ set_config(apikey, default_city)
 # Create main MCP server
 mcp = FastMCP(name="WeatherServer")
 
+# Define a health check tool for Docker
+@mcp.tool()
+async def health_check() -> dict:
+    """
+    Health check endpoint for Docker.
+    Returns a status indicating if the service is running.
+    
+    Returns:
+        Dictionary with status information
+    """
+    return {
+        "status": "healthy",
+        "service": "weather-mcp-server"
+    }
+
+# Define a custom 404 error page tool
+@mcp.tool()
+async def get_404_page() -> dict:
+    """
+    Get a custom 404 error page.
+    Returns HTML content for a nice 404 error page.
+    
+    Returns:
+        Dictionary with HTML content for the 404 page
+    """
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>404 - Page Not Found</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f5f5f5;
+                color: #333;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .container {
+                text-align: center;
+                background-color: white;
+                border-radius: 8px;
+                padding: 40px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                max-width: 500px;
+            }
+            h1 {
+                font-size: 36px;
+                margin-bottom: 10px;
+                color: #e74c3c;
+            }
+            p {
+                font-size: 18px;
+                margin-bottom: 20px;
+            }
+            .back-link {
+                color: #3498db;
+                text-decoration: none;
+                font-weight: bold;
+            }
+            .back-link:hover {
+                text-decoration: underline;
+            }
+            .weather-icon {
+                font-size: 72px;
+                margin-bottom: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="weather-icon">🌦️</div>
+            <h1>404 - Page Not Found</h1>
+            <p>Oops! The page you're looking for doesn't exist.</p>
+            <p>This is a Weather MCP Server. It provides weather information through API endpoints.</p>
+            <p>
+                <a href="/" class="back-link">Go to Home</a>
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    return {
+        "html": html_content
+    }
+
 # No resources for now, just focus on the tools
 
 # Mount the weather plugin (sub-server) for weather tools
@@ -81,284 +164,6 @@ mcp.mount("weather", weather_mcp)
 
 # Define HTTP streaming handler functions
 
-# Global queue for streaming messages
-message_queue = asyncio.Queue()
-# Dictionary to store responses for each request
-responses = {}
-
-async def handle_root(request):
-    """Handle requests to the root path"""
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Weather MCP Server</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-            h1 { color: #333; }
-            pre { background-color: #f5f5f5; padding: 10px; border-radius: 5px; }
-            .endpoint { margin-bottom: 20px; }
-        </style>
-    </head>
-    <body>
-        <h1>Weather MCP Server</h1>
-        <p>This server provides weather information via the OpenWeatherMap API using the Model Context Protocol (MCP).</p>
-        
-        <div class="endpoint">
-            <h2>Available Endpoints:</h2>
-            <ul>
-                <li><strong>/stream</strong> - HTTP streaming endpoint (GET)</li>
-                <li><strong>/sse</strong> - Legacy SSE endpoint (GET)</li>
-                <li><strong>/mcp</strong> - MCP request endpoint (POST)</li>
-            </ul>
-        </div>
-        
-        <div class="endpoint">
-            <h2>Example Usage:</h2>
-            <p>1. Connect to the streaming endpoint:</p>
-            <pre>const eventSource = new EventSource('/stream');</pre>
-            
-            <p>2. Send a request to the MCP endpoint:</p>
-            <pre>
-fetch('/mcp', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-Client-ID': clientId
-  },
-  body: JSON.stringify({
-    tool: 'weather.get_weather',
-    args: {
-      city: 'London,uk'
-    }
-  })
-});
-            </pre>
-        </div>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
-
-async def handle_options(request):
-    """Handle OPTIONS requests for CORS preflight"""
-    logger.info(f"Received OPTIONS request to {request.url.path}")
-    
-    headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Client-ID",
-        "Access-Control-Max-Age": "86400",  # 24 hours
-    }
-    
-    return JSONResponse(content={}, headers=headers)
-
-async def handle_catch_all(request):
-    """Handle any request and log it for debugging"""
-    logger.info(f"Received {request.method} request to {request.url.path}")
-    logger.info(f"Headers: {request.headers}")
-    
-    # For POST requests, try to log the body
-    if request.method == "POST":
-        try:
-            body = await request.body()
-            logger.info(f"Body: {body}")
-        except Exception as e:
-            logger.info(f"Could not read body: {e}")
-    
-    # Return a 404 response
-    return JSONResponse(
-        {"error": f"Endpoint not found: {request.url.path}"},
-        status_code=404
-    )
-
-async def handle_streaming(request):
-    """Handle HTTP streaming connections"""
-    # Log the request method and path
-    logger.info(f"Received {request.method} request to {request.url.path}")
-    
-    # Handle POST requests (for FastMCP client)
-    if request.method == "POST":
-        try:
-            # Parse the request body
-            data = await request.json()
-            logger.info(f"Received POST data to streaming endpoint: {data}")
-            
-            # Get client ID from header or generate a new one
-            client_id = request.headers.get('X-Client-ID', str(uuid.uuid4()))
-            
-            # Return a success response for non-JSON-RPC requests
-            return JSONResponse(
-                {"status": "success", "message": "Streaming connection established", "client_id": client_id},
-                status_code=200
-            )
-        except Exception as e:
-            logger.error(f"Error processing POST request to streaming endpoint: {str(e)}")
-            return JSONResponse(
-                {"error": f"Error processing request: {str(e)}"},
-                status_code=500
-            )
-    
-    # Handle GET requests (for browser clients)
-    client_id = request.query_params.get('client_id')
-    if not client_id:
-        client_id = str(uuid.uuid4())
-    
-    logger.info(f"New streaming connection established with client_id: {client_id}")
-    
-    async def event_generator():
-        while True:
-            message = await message_queue.get()
-            # Only send messages intended for this client or broadcast messages
-            if message.get('client_id') == client_id or message.get('broadcast', False):
-                yield f"data: {json.dumps(message)}\n\n"
-    
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Client-ID": client_id
-        }
-    )
-
-async def handle_mcp_request(request):
-    """Handle MCP requests and send responses via HTTP streaming"""
-    try:
-        # Get client ID from header or generate a new one
-        client_id = request.headers.get('X-Client-ID', str(uuid.uuid4()))
-        
-        # Parse the request
-        data = await request.json()
-        logger.info(f"Received MCP request from client {client_id}: {data}")
-        
-        # Handle JSON-RPC requests
-        if 'jsonrpc' in data and 'method' in data:
-            method = data['method']
-            params = data.get('params', {})
-            request_id = data.get('id', str(uuid.uuid4()))
-            
-            # Handle tools/list method
-            if method == 'tools/list':
-                # Get list of available tools
-                tools = []
-                # Add weather tools - access tools through the _tool_manager._tools attribute
-                for tool_name, tool_obj in weather_mcp._tool_manager._tools.items():
-                    tool_info = {
-                        "name": f"weather.{tool_name}",
-                        "description": tool_obj.description or "",
-                        "parameters": tool_obj.parameters if hasattr(tool_obj, 'parameters') else {}
-                    }
-                    tools.append(tool_info)
-                
-                # Create JSON-RPC response
-                response = {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "result": tools
-                }
-                
-                # Store the response and send it via streaming
-                responses[request_id] = response
-                await message_queue.put({
-                    "client_id": client_id,
-                    "request_id": request_id,
-                    "result": tools
-                })
-                
-                return JSONResponse(response, status_code=200)
-            else:
-                # Return error for unsupported methods
-                error_response = {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {
-                        "code": -32601,
-                        "message": f"Method not found: {method}"
-                    }
-                }
-                return JSONResponse(error_response, status_code=404)
-                
-        # Handle MCP tool requests (non-JSON-RPC format)
-        elif 'tool' in data:
-            tool_name = data['tool']
-            args = data.get('args', {})
-            
-            # Split the tool name to get the server and tool
-            parts = tool_name.split('.')
-            if len(parts) != 2:
-                return JSONResponse(
-                    {"error": f"Invalid tool name format: {tool_name}. Expected format: server.tool"},
-                    status_code=400
-                )
-            
-            server_name, tool = parts
-            
-            # Handle the case for the weather server
-            if server_name == "weather":
-                server = weather_mcp
-                tool_obj = server._tool_manager._tools.get(tool)
-                if not tool_obj:
-                    return JSONResponse(
-                        {"error": f"Tool not found: {tool} in server {server_name}"},
-                        status_code=404
-                    )
-                # Get the actual function from the tool object
-                tool_func = tool_obj.fn
-            else:
-                return JSONResponse(
-                    {"error": f"Server not found: {server_name}"},
-                    status_code=404
-                )
-            
-            # Execute the tool
-            try:
-                result = tool_func(**args)
-                
-                # Send the result via streaming
-                response = {
-                    "client_id": client_id,
-                    "request_id": data.get('request_id', str(uuid.uuid4())),
-                    "result": result
-                }
-                
-                # Store the response and send it via streaming
-                responses[response["request_id"]] = response
-                await message_queue.put(response)
-                
-                return JSONResponse(
-                    {"status": "success", "request_id": response["request_id"]},
-                    status_code=200
-                )
-            except Exception as e:
-                error_message = str(e)
-                logger.error(f"Error executing tool {tool_name}: {error_message}")
-                
-                # Send the error via streaming
-                response = {
-                    "client_id": client_id,
-                    "request_id": data.get('request_id', str(uuid.uuid4())),
-                    "error": error_message
-                }
-                
-                await message_queue.put(response)
-                
-                return JSONResponse(
-                    {"status": "error", "error": error_message, "request_id": response["request_id"]},
-                    status_code=500
-                )
-        else:
-            return JSONResponse(
-                {"error": "Invalid request format. Either 'jsonrpc' and 'method' or 'tool' field is required."},
-                status_code=400
-            )
-    except Exception as e:
-        logger.error(f"Error processing MCP request: {str(e)}")
-        return JSONResponse(
-            {"error": f"Internal server error: {str(e)}"},
-            status_code=500
-        )
 
 if __name__ == "__main__":
     # Log the raw value of the environment variable
@@ -372,49 +177,24 @@ if __name__ == "__main__":
     logger.info(f"Starting server in {mode.upper()} mode")
     
     try:
-        if mode == 'sse':  # Support all mode names
+        if mode == 'sse':
             # Get host and port from environment or use defaults
             host = os.getenv('HTTP_HOST', os.getenv('SSE_HOST', '127.0.0.1'))
             port = int(os.getenv('HTTP_PORT', os.getenv('SSE_PORT', '8000')))
             
-            # For FastMCP compatibility
-            logger.info("Using HTTP streaming mode with SSE transport")
-            logger.info(f"HTTP server will be available at http://{host}:{port}")
+            logger.info(f"Starting server with SSE transport at http://{host}:{port}")
+            mcp.run(transport="sse", host=host, port=port)
+        elif mode == 'streamable-http':
+            # Get host and port from environment or use defaults
+            host = os.getenv('HTTP_HOST', '127.0.0.1')
+            port = int(os.getenv('HTTP_PORT', '8000'))
+            path = os.getenv('HTTP_PATH', '/mcp')
             
-            # Create routes for streaming and MCP
-            routes = [
-                Route("/", endpoint=handle_root, methods=["GET"]),             # Root path with information
-                # Legacy endpoint for backward compatibility - accept all methods
-                Route("/sse", endpoint=handle_streaming),
-                Route("/mcp", endpoint=handle_mcp_request, methods=["POST"]),
-                Route("/mcp", endpoint=handle_options, methods=["OPTIONS"]),   # OPTIONS handler for CORS preflight
-                # Add routes for all possible FastMCP endpoints
-                Route("/tools", endpoint=handle_mcp_request, methods=["POST"]),
-                Route("/resources", endpoint=handle_mcp_request, methods=["GET", "POST"]),
-                Route("/tools/{tool_name}", endpoint=handle_mcp_request, methods=["POST"]),
-                Route("/resources/{resource_name}", endpoint=handle_mcp_request, methods=["GET"]),
-                Route("/weather.get_weather", endpoint=handle_mcp_request, methods=["POST"]),
-                Route("/weather/get_weather", endpoint=handle_mcp_request, methods=["POST"]),
-                # Catch-all route for debugging
-                Route("/{path:path}", endpoint=handle_catch_all, methods=["GET", "POST", "OPTIONS"]),
-            ]
-            
-            # Create Starlette app with CORS middleware
-            middleware = [
-                Middleware(
-                    CORSMiddleware,
-                    allow_origins=["*"],
-                    allow_methods=["GET", "POST", "OPTIONS"],
-                    allow_headers=["Content-Type", "X-Client-ID"],
-                )
-            ]
-            starlette_app = Starlette(debug=True, routes=routes, middleware=middleware)
-            
-            # Start the server with uvicorn
-            logger.info(f"Starting HTTP server on port {port}")
-            uvicorn.run(starlette_app, host=host, port=port)
+            logger.info(f"Starting server with streamable-http transport at http://{host}:{port}{path}")
+            mcp.run(transport="streamable-http", host=host, port=port, path=path)
         else:
             # Default to stdio mode
+            logger.info("Starting server with stdio transport")
             mcp.run(transport="stdio")
     except Exception as e:
         logger.error(f"Error during server startup: {str(e)}")
