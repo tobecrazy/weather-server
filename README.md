@@ -33,7 +33,7 @@ weather-server/
     ├── requirements.txt       # Python dependencies
     ├── Dockerfile             # Docker container definition
     ├── docker-compose.yml     # Docker Compose configuration
-    ├── run_server.sh          # Convenience script to run the server
+    ├── run_server.sh          # Script to run the server
     └── README.md              # Detailed documentation for the MCP server
 ```
 

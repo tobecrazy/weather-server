@@ -154,61 +154,6 @@ docker run -d --name weather-mcp-server \
 
 ## Using the Weather Tool
 
-### Example Clients
-
-The project includes example client scripts that demonstrate how to use the weather MCP server:
-
-#### Standard Client (stdio mode)
-
-```bash
-# Make the script executable if needed
-chmod +x example_client.py
-
-# Get current weather for London
-./example_client.py --city London,uk
-
-# Get tomorrow's weather for Tokyo
-./example_client.py --city Tokyo --days 1
-```
-
-#### SSE Client
-
-```bash
-# Make the script executable if needed
-chmod +x example_client_streamable.py
-
-# Connect using the SSE transport
-./example_client_streamable.py --transport sse --host 127.0.0.1 --port 8000 --city Paris
-
-# Get tomorrow's weather for Tokyo
-./example_client_streamable.py --transport sse --host 127.0.0.1 --port 8000 --city Tokyo --days 1
-```
-
-### Testing the Server
-
-The project includes a test script that verifies the server is working correctly:
-
-```bash
-# Make the script executable if needed
-chmod +x test_server.py
-
-# Test with default settings (stdio mode)
-./test_server.py
-
-# Test with a specific city
-./test_server.py --city Tokyo
-
-# Test against an SSE server
-./test_server.py --transport sse --host 127.0.0.1 --port 8000
-```
-
-The test script runs three tests:
-1. Getting current weather
-2. Getting tomorrow's forecast
-3. Getting a forecast for a future day (up to 15 days ahead)
-
-If all tests pass, the script exits with code 0. If any test fails, it exits with code 1.
-
 ### API Details
 
 #### Tools
