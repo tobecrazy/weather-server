@@ -126,10 +126,11 @@ This MCP server can be integrated with AI assistants that support the Model Cont
 
 ## Transport Modes
 
-The server supports two transport modes:
+The server supports these transport modes:
 
-1. **stdio**: Standard input/output mode (default, good for CLI usage)
-2. **sse**: HTTP server mode with streaming support (recommended for web clients)
+1. **stdio**: Standard input/output mode (good for CLI usage)
+2. **streamable-http**: HTTP server mode with streaming support (default and recommended for web clients)
+3. **sse**: Legacy HTTP streaming mode (for backward compatibility)
 
 ## Docker Support
 

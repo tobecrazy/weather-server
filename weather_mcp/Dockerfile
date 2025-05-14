@@ -12,8 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Default to sse mode, can be overridden at runtime
-ENV MCP_TRANSPORT_MODE=sse
+# Default to streamable-http mode, can be overridden at runtime
+ENV MCP_TRANSPORT_MODE=streamable-http
 ENV DEFAULT_CITY=Beijing,cn
 ENV HTTP_HOST=0.0.0.0
 ENV HTTP_PORT=8000

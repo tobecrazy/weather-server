@@ -6,19 +6,19 @@ show_help() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  -m, --mode MODE     Set the transport mode (stdio or sse, default: stdio)"
+    echo "  -m, --mode MODE     Set the transport mode (stdio, sse, or streamable-http, default: streamable-http)"
     echo "  -h, --host HOST     Set the host for HTTP mode (default: 127.0.0.1)"
     echo "  -p, --port PORT     Set the port for HTTP mode (default: 8000)"
     echo "  --help              Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                  Run in stdio mode (default)"
+    echo "  $0                  Run in streamable-http mode (default)"
     echo "  $0 -m sse  Run in HTTP mode with default host and port"
     echo "  $0 -m sse -p 8080   Run in HTTP mode on port 8080"
 }
 
 # Default values
-MODE="stdio"
+MODE="streamable-http"
 HOST="127.0.0.1"
 PORT="8000"
 
@@ -79,7 +79,7 @@ fi
 # Run the server based on the selected mode
 echo "Starting Weather MCP Server in ${MODE} mode..."
 
-if [ "$MODE" = "sse" ]; then
+if [ "$MODE" = "sse" ] || [ "$MODE" = "streamable-http" ]; then
     echo "Server will be available at http://${HOST}:${PORT}"
     # Use the FastMCP CLI if available, otherwise fall back to direct execution
     if command -v fastmcp &> /dev/null; then

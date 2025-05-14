@@ -224,9 +224,9 @@ This project has been updated to work with FastAPI 0.115.12. The HTTP streaming 
 
 The server now supports the following transport modes:
 
-1. **stdio**: Standard input/output mode (default, good for CLI usage)
-2. **sse**: HTTP server mode with streaming support (recommended for web clients)
-3. **streamable-http**: Deprecated alias for sse mode (for backward compatibility)
+1. **stdio**: Standard input/output mode (good for CLI usage)
+2. **streamable-http**: HTTP server mode with streaming support (default and recommended for web clients)
+3. **sse**: Legacy HTTP streaming mode (for backward compatibility)
 
 ### HTTP Streaming Architecture
 
