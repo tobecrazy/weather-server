@@ -5,6 +5,7 @@ from http import HTTPStatus
 
 # Third-party imports
 import yaml
+from fastapi import Request
 from fastmcp import FastMCP
 from dotenv import load_dotenv
 
@@ -78,6 +79,10 @@ async def health_check() -> dict:
         "status": "healthy",
         "service": "weather-mcp-server"
     }
+
+@mcp.app.get("/mcp/info")
+async def get_mcp_info(request: Request):
+    return {"status": "healthy", "service": "weather-mcp-server", "path_accessed": "/mcp/info"}
 
 # Define a custom 404 error page tool
 @mcp.tool()

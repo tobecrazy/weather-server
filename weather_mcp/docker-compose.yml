@@ -20,7 +20,7 @@ services:
       - ./weather.log:/app/weather.log  # Persist logs
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-X", "POST", "-H", "Content-Type: application/json", "-d", '{"tool":"health_check","arguments":{}}', "http://localhost:8000/mcp"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/mcp/info"]
       interval: 30s
       timeout: 3s
       retries: 3
