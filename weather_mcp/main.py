@@ -80,9 +80,16 @@ async def health_check() -> dict:
         "service": "weather-mcp-server"
     }
 
-@mcp.get("/mcp/info")
-async def get_mcp_info(request: Request):
-    return {"status": "healthy", "service": "weather-mcp-server", "path_accessed": "/mcp/info"}
+@mcp.tool()
+async def get_mcp_info() -> dict:
+    """
+    Get MCP server information.
+    Returns status information about the MCP server.
+    
+    Returns:
+        Dictionary with status information
+    """
+    return {"status": "healthy", "service": "weather-mcp-server"}
 
 # Define a custom 404 error page tool
 @mcp.tool()
