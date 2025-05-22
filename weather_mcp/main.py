@@ -80,7 +80,7 @@ async def health_check() -> dict:
         "service": "weather-mcp-server"
     }
 
-@mcp.app.get("/mcp/info")
+@mcp.get("/mcp/info")
 async def get_mcp_info(request: Request):
     return {"status": "healthy", "service": "weather-mcp-server", "path_accessed": "/mcp/info"}
 
