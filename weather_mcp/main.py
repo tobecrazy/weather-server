@@ -160,11 +160,11 @@ async def get_404_page() -> dict:
 # Define health check info as a TextResource for GET /mcp/info
 health_info_text = '{"status": "healthy", "service": "weather-mcp-server"}'
 health_resource = TextResource(
-    uri="/mcp/info",  # This URI should map to the GETtable path
+    uri="resource://mcp/info", # Changed to use resource:// scheme
     name="Health Check Information",
     text=health_info_text,
     mime_type="application/json",
-    description="Provides a simple health status for the server via GET /mcp/info."
+    description="Provides a simple health status for the server via GET /mcp/info." # Description might need update later
 )
 mcp.add_resource(health_resource)
 
