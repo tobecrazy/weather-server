@@ -6,6 +6,7 @@ from http import HTTPStatus
 # Third-party imports
 import yaml
 from fastmcp import FastMCP
+from fastmcp.resources import TextResource
 from dotenv import load_dotenv
 
 # Load environment variables from .env file if it exists
@@ -155,6 +156,17 @@ async def get_404_page() -> dict:
     return {
         "html": html_content
     }
+
+# Define health check info as a TextResource for GET /mcp/info
+health_info_text = '{"status": "healthy", "service": "weather-mcp-server"}'
+health_resource = TextResource(
+    uri="resource://mcp/info", # Changed to use resource:// scheme
+    name="Health Check Information",
+    text=health_info_text,
+    mime_type="application/json",
+    description="Provides a simple health status for the server via GET /mcp/info." # Description might need update later
+)
+mcp.add_resource(health_resource)
 
 # No resources for now, just focus on the tools
 
