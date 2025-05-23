@@ -5,8 +5,8 @@ from http import HTTPStatus
 
 # Third-party imports
 import yaml
-from fastapi import Request
 from fastmcp import FastMCP
+from fastmcp.resources import TextResource
 from dotenv import load_dotenv
 
 # Load environment variables from .env file if it exists
@@ -79,17 +79,6 @@ async def health_check() -> dict:
         "status": "healthy",
         "service": "weather-mcp-server"
     }
-
-@mcp.tool()
-async def get_mcp_info() -> dict:
-    """
-    Get MCP server information.
-    Returns status information about the MCP server.
-    
-    Returns:
-        Dictionary with status information
-    """
-    return {"status": "healthy", "service": "weather-mcp-server"}
 
 # Define a custom 404 error page tool
 @mcp.tool()
@@ -167,6 +156,17 @@ async def get_404_page() -> dict:
     return {
         "html": html_content
     }
+
+# Define health check info as a TextResource for GET /mcp/info
+health_info_text = '{"status": "healthy", "service": "weather-mcp-server"}'
+health_resource = TextResource(
+    uri="/mcp/info",  # This URI should map to the GETtable path
+    name="Health Check Information",
+    text=health_info_text,
+    mime_type="application/json",
+    description="Provides a simple health status for the server via GET /mcp/info."
+)
+mcp.add_resource(health_resource)
 
 # No resources for now, just focus on the tools
 
