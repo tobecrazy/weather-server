@@ -3,3 +3,5 @@ PyYAML>=6.0.2
 requests>=2.32.3
 python-dotenv>=0.19.0
 sseclient-py>=1.8.0
+fastapi
+uvicorn[standard]

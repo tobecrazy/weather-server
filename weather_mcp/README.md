@@ -131,6 +131,9 @@ docker-compose logs -f
 docker-compose down
 ```
 
+**Health Check:**
+The Docker configurations (`Dockerfile` and `docker-compose.yml`) define a health check to monitor the server's status. This health check now utilizes a GET request to the `/mcp/info` endpoint (accessible at `http://localhost:8000/mcp/info` if the container's port 8000 is mapped to the host's port 8000). This endpoint returns a JSON response confirming the service is operational.
+
 #### Using Docker directly:
 
 ```bash
