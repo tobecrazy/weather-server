@@ -109,7 +109,7 @@ fastmcp run main.py:mcp
 For HTTP streaming mode:
 ```bash
 # If fastmcp is installed as a command-line tool
-fastmcp run main.py:mcp --transport sse --host 127.0.0.1 --port 8000
+fastmcp run main.py:mcp --transport sse --host 127.0.0.1 --port 3333
 ```
 
 Alternatively, you can set `mode: sse` in `config.yaml` and run with Python directly.
@@ -132,7 +132,7 @@ docker-compose down
 ```
 
 **Health Check:**
-The Docker configurations (`Dockerfile` and `docker-compose.yml`) define a health check to monitor the server's status. This health check now utilizes a GET request to the `/mcp/info` endpoint (accessible at `http://localhost:8000/mcp/info` if the container's port 8000 is mapped to the host's port 8000). This endpoint returns a JSON response confirming the service is operational.
+The Docker configurations (`Dockerfile` and `docker-compose.yml`) define a health check to monitor the server's status. This health check now utilizes a GET request to the `/mcp/info` endpoint (accessible at `http://localhost:3333/mcp/info` if the container's port 3333 is mapped to the host's port 3333). This endpoint returns a JSON response confirming the service is operational.
 
 #### Using Docker directly:
 
@@ -151,7 +151,7 @@ docker run -d --name weather-mcp-server \
   -e MCP_TRANSPORT_MODE=sse \
   -e HTTP_HOST=0.0.0.0 \
   -e SSE_HOST=0.0.0.0 \
-  -p 8000:8000 \
+  -p 3333:3333 \
   weather-mcp-server
 ```
 
@@ -252,7 +252,7 @@ To connect to the HTTP streaming server:
 1. Establish a streaming connection:
    ```javascript
    // Browser example
-   const eventSource = new EventSource('http://localhost:8000/stream');
+   const eventSource = new EventSource('http://localhost:3333/stream');
    eventSource.onmessage = (event) => {
      const data = JSON.parse(event.data);
      console.log('Received:', data);
@@ -263,7 +263,7 @@ To connect to the HTTP streaming server:
    ```javascript
    // Browser example
    const clientId = '...'; // Get this from the streaming connection headers
-   fetch('http://localhost:8000/mcp', {
+   fetch('http://localhost:3333/mcp', {
      method: 'POST',
      headers: {
        'Content-Type': 'application/json',

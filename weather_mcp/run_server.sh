@@ -20,7 +20,7 @@ show_help() {
 # Default values
 MODE="streamable-http"
 HOST="127.0.0.1"
-PORT="8000"
+PORT="3333"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
