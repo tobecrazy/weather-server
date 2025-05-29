@@ -192,14 +192,14 @@ if __name__ == "__main__":
         if mode == 'sse':
             # Get host and port from environment or use defaults
             host = os.getenv('HTTP_HOST', os.getenv('SSE_HOST', '127.0.0.1'))
-            port = int(os.getenv('HTTP_PORT', os.getenv('SSE_PORT', '8000')))
+            port = int(os.getenv('HTTP_PORT', os.getenv('SSE_PORT', '3333')))
             
             logger.info(f"Starting server with SSE transport at http://{host}:{port}")
             mcp.run(transport="sse", host=host, port=port)
         elif mode == 'streamable-http':
             # Get host and port from environment or use defaults
             host = os.getenv('HTTP_HOST', '127.0.0.1')
-            port = int(os.getenv('HTTP_PORT', '8000'))
+            port = int(os.getenv('HTTP_PORT', '3333'))
             path = os.getenv('HTTP_PATH', '/mcp')
             
             logger.info(f"Starting server with streamable-http transport at http://{host}:{port}{path}")
