@@ -8,6 +8,7 @@ apikey: your api key
 #   - sse: HTTP server mode with streaming support (recommended for web clients)
 #   - streamable-http: Alias for sse mode (for backward compatibility)
 mode: sse
+port: 3399
 
 # Default city to use when no city is specified in requests
 # Format: City name, optionally with country code (e.g., "London,uk")

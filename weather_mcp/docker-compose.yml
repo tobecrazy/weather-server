@@ -5,20 +5,20 @@ services:
     container_name: weather-mcp-server
     environment:
       - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY:-your_api_key_here}
-      - MCP_TRANSPORT_MODE=streamable-http
+      - MCP_TRANSPORT_MODE=sse
       - DEFAULT_CITY=${DEFAULT_CITY:-Beijing,cn}
       - HTTP_HOST=0.0.0.0  # Listen on all interfaces inside container
-      - HTTP_PORT=8000
+      - HTTP_PORT=3399
       - SSE_HOST=0.0.0.0  # Legacy settings for backward compatibility
-      - SSE_PORT=8000
+      - SSE_PORT=3399
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports:
-      - "8000:8000"  # Map container port to host
+      - "3399:3399"  # Map container port to host
     volumes:
       - ./weather.log:/app/weather.log  # Persist logs
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/mcp/info"]
+      test: ["CMD", "curl", "-f", "http://localhost:3399/mcp/info"]
       interval: 30s
       timeout: 3s
       retries: 3

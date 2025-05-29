@@ -92,7 +92,7 @@ docker-compose up -d
 
 # Or build and run the Docker image directly
 docker build -t weather-mcp-server .
-docker run -d -p 8000:8000 -e OPENWEATHERMAP_API_KEY=your_api_key_here weather-mcp-server
+docker run -d -p 3399:3399 -e OPENWEATHERMAP_API_KEY=your_api_key_here weather-mcp-server
 ```
 
 ## Using with AI Assistants
