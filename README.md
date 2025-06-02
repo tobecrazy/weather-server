@@ -140,6 +140,11 @@ The project includes Docker support for easy deployment:
 - **docker-compose.yml**: Simplifies deployment with environment variables
 - **.dockerignore**: Optimizes Docker builds
 
+## MCP Client
+
+A Python client is available to interact with the Weather MCP server programmatically. 
+For more details on usage and examples, please see the [MCP Client documentation in weather_mcp/README.md](./weather_mcp/README.md#mcp-client).
+
 ## Detailed Documentation
 
 For more detailed information about the MCP server implementation, API details, and advanced usage, please refer to the [weather_mcp/README.md](weather_mcp/README.md) file.

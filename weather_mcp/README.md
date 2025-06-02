@@ -197,6 +197,84 @@ The server provides a single tool: `weather.get_weather`
 
 This implementation focuses on the core weather tool functionality. Resources have been temporarily disabled due to compatibility issues with the current version of FastMCP.
 
+## MCP Client
+
+This project includes a Python-based asynchronous client, `WeatherMCPClient`, designed to interact with the Weather MCP server. It simplifies making requests to the server's tools and handling responses.
+
+### Client Installation
+
+The client relies on the `httpx` library for asynchronous HTTP requests. To install all necessary dependencies, including those for the client, use the main `requirements.txt` file:
+
+```bash
+pip install -r weather_mcp/requirements.txt
+```
+Alternatively, if you only need the client and its direct dependency:
+```bash
+pip install httpx
+```
+
+### Basic Usage Example
+
+Here's a basic example of how to use the `WeatherMCPClient`:
+
+```python
+import asyncio
+from weather_mcp.mcp_client.weather_mcp_client import WeatherMCPClient, MCPClientError
+
+async def main():
+    # Ensure the MCP server is running and accessible at this URL
+    client = WeatherMCPClient("http://localhost:3399/sse") # Or your server URL
+
+    try:
+        # Example: Get health check
+        print("\n--- Calling Health Check ---")
+        health = await client.health_check()
+        print("Health Check:", health)
+        
+        # Example: Get weather for default city (configured on server)
+        print("\n--- Calling Get Weather (Default) ---")
+        weather_today = await client.get_weather()
+        print("Weather Today:", weather_today)
+        
+        # Example: Get weather for London tomorrow
+        print("\n--- Calling Get Weather (London, 1 day) ---")
+        weather_london_tomorrow = await client.get_weather(city="London,uk", days=1)
+        print("Weather London Tomorrow:", weather_london_tomorrow)
+
+        # Example: Get the MCP info resource
+        print("\n--- Calling Get MCP Info Resource ---")
+        mcp_info = await client.get_health_resource()
+        print("MCP Info:", mcp_info)
+
+    except MCPClientError as e:
+        print(f"Client Error: {e}")
+        if e.status_code:
+            print(f"Status Code: {e.status_code}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+    finally:
+        await client.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Running the Test Script
+
+The client module includes a test script `weather_mcp/mcp_client/test_client.py` that demonstrates the usage of all client functionalities.
+
+**Prerequisites:**
+*   The Weather MCP server **must** be running and accessible (e.g., at `http://localhost:3399/sse`).
+*   All dependencies from `weather_mcp/requirements.txt` must be installed.
+
+**To run the test script:**
+
+Navigate to the root directory of the `weather_mcp` project and execute:
+```bash
+python weather_mcp/mcp_client/test_client.py
+```
+The script will call each method of the `WeatherMCPClient` (health check, get 404 page, get weather with different parameters, get MCP info resource) and print the server's responses or any errors encountered. This is a good way to verify that both the client and server are functioning correctly.
+
 ## Error Handling
 
 The server includes comprehensive error handling for:
