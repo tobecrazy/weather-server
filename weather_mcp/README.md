@@ -67,6 +67,50 @@ weather_mcp/
    export DEFAULT_CITY=London,uk
    ```
 
+## Authorization
+
+When running the server in `sse` or `streamable-http` (default HTTP) transport modes, requests to MCP tools are protected by Bearer Token authentication. This enhances security for network-accessible deployments.
+
+### Setting the Secret Token
+
+The server expects a shared secret token for validating requests. This token must be provided via the `MCP_SHARED_SECRET` environment variable.
+
+Example:
+```bash
+export MCP_SHARED_SECRET="your-very-secure-and-random-token"
+```
+If this variable is not set, the server will use a default placeholder token and log a warning. **It is crucial to set a strong, unique secret token for any production or publicly accessible environments.**
+
+### Making Authorized Requests
+
+Clients must include this token in the `Authorization` header as a Bearer token.
+
+Here's an example using `curl` to call the `weather.get_weather` tool:
+
+```bash
+curl -X POST http://localhost:3399/mcp \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer your-very-secure-and-random-token" \
+     -d '{
+       "tool": "weather.get_weather",
+       "args": {
+         "city": "Paris"
+       }
+     }'
+```
+
+Replace `your-very-secure-and-random-token` with the actual token set in `MCP_SHARED_SECRET`.
+
+### Exempted Paths
+
+The following paths are exempt from authentication:
+
+-   `/mcp/health_check`: The health check endpoint.
+-   `/mcp/info`: The server information endpoint.
+-   FastAPI documentation paths (e.g., `/docs`, `/openapi.json`, `/redoc`) if enabled and accessed.
+
+The `stdio` transport mode does not use this authentication mechanism.
+
 ## Running the Server
 
 ### Using the provided script:
