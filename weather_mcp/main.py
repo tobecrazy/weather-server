@@ -9,8 +9,9 @@ from fastmcp import FastMCP
 from fastmcp.resources import TextResource
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseCallNext
-from starlette.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware # RequestResponseCallNext removed
+from starlette.responses import JSONResponse, Response # Added Response for type hint
+from typing import Callable # Added Callable
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -38,7 +39,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         ]
         self.logger.info(f"AuthMiddleware initialized. Bypass paths: {self.bypass_paths}")
 
-    async def dispatch(self, request: Request, call_next: RequestResponseCallNext):
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Check if current request path should bypass authentication
         if request.url.path in self.bypass_paths or any(request.url.path.startswith(p_start) for p_start in ["/docs", "/redoc"]): # Handle subpaths of /docs
             self.logger.debug(f"Bypassing auth for path: {request.url.path}")
