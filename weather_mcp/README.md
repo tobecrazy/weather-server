@@ -75,11 +75,17 @@ When running the server in `sse` or `streamable-http` (default HTTP) transport m
 
 The server expects a shared secret token for validating requests. This token must be provided via the `MCP_SHARED_SECRET` environment variable.
 
-Example:
+You can generate a cryptographically strong, URL-safe token using the provided utility:
 ```bash
-export MCP_SHARED_SECRET="your-very-secure-and-random-token"
+python -m weather_mcp.token_utils
 ```
-If this variable is not set, the server will use a default placeholder token and log a warning. **It is crucial to set a strong, unique secret token for any production or publicly accessible environments.**
+This command will output a generated token (e.g., `Generated Token: AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-ABc`) which you can then use to set the environment variable.
+
+Example of setting the variable after generating a token:
+```bash
+export MCP_SHARED_SECRET="use_the_token_generated_by_the_script_here"
+```
+If this variable is not set, or if it's set to the default placeholder `your_secret_token`, the server will log a warning. **It is crucial to set a strong, unique secret token for any production or publicly accessible environments.**
 
 ### Making Authorized Requests
 
