@@ -52,6 +52,14 @@ logging.basicConfig(
 logger = logging.getLogger('weather_mcp') # Main application logger
 logger.info("Application logging configured to file.")
 
+# Set specific loggers to DEBUG level if needed,
+# ensuring debug messages from auth components are captured.
+# This is useful if the global log_level is higher (e.g. INFO).
+if getattr(logging, log_level, logging.INFO) > logging.DEBUG: # log_level is the string name from env
+    logging.getLogger('weather_mcp.AuthMiddleware').setLevel(logging.DEBUG)
+    # logging.getLogger('weather_mcp.run_wrapper').setLevel(logging.DEBUG) # run_wrapper is being removed
+    logger.info("DEBUG level explicitly set for 'weather_mcp.AuthMiddleware'.")
+
 
 # Load configuration - first try environment variables, then config.yaml
 apikey = os.getenv('OPENWEATHERMAP_API_KEY')
@@ -99,21 +107,21 @@ set_config(apikey, default_city)
 class AuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, expected_token: str, mcp_base_path: str = "/mcp"):
         super().__init__(app)
+        self.logger = logging.getLogger('weather_mcp.AuthMiddleware') # Get logger first
+        self.logger.info(f"AuthMiddleware INSTANCE CREATED. ID: {id(self)}") # Added
         self.expected_token = expected_token
         self.mcp_base_path = mcp_base_path
-        self.logger = logging.getLogger('weather_mcp.AuthMiddleware')
 
         # This check is a safeguard. The global EXPECTED_TOKEN is already handled at startup.
         if not self.expected_token:
             self.logger.critical(
-                "CRITICAL: AuthMiddleware initialized with an effectively empty expected_token. "
+                f"Auth ID {id(self)}: CRITICAL: AuthMiddleware initialized with an effectively empty expected_token. " # Enhanced
                 "This should have been caught by startup logic. Using a new random token."
             )
             # This ensures self.expected_token is definitely not empty for the middleware's lifetime
             self.expected_token = secrets.token_hex(32)
 
-        self.logger.info(f"AuthMiddleware initialized. Bypass paths configured for base: {self.mcp_base_path}")
-        self.bypass_paths = [
+        self.bypass_paths = [ # Define bypass_paths before logging them
             f"{self.mcp_base_path}/health_check",
             f"{self.mcp_base_path}/info",
             "/openapi.json",
@@ -121,20 +129,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/docs/oauth2-redirect",
             "/redoc"
         ]
+        self.logger.info(f"AuthMiddleware ID {id(self)} configured. Expected token (snippet): '{self.expected_token[:5]}...', MCP Base: '{self.mcp_base_path}', Bypass Paths: {self.bypass_paths}") # Added
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        self.logger.info(f"AuthMiddleware ID {id(self)} DISPATCHING FOR: {request.method} {request.url.path}, Headers: {request.headers}") # Added
+
+        self.logger.debug(f"Auth ID {id(self)}: Evaluating bypass for {request.url.path}. Against: {self.bypass_paths}") # Added
         if request.url.path in self.bypass_paths or \
            any(request.url.path.startswith(p_start) for p_start in ["/docs", "/redoc"]):
-            self.logger.debug(f"Bypassing auth for exempt path: {request.url.path}")
+            self.logger.info(f"Auth ID {id(self)}: Path {request.url.path} BYPASSED authentication.") # Added
             return await call_next(request)
 
-        self.logger.debug(f"Applying auth for path: {request.url.path}")
+        self.logger.info(f"Auth ID {id(self)}: Path {request.url.path} NOT BYPASSED. Proceeding to auth checks.") # Added
 
         # This is a critical safeguard. If server's token is empty here, it's a major issue.
         if not self.expected_token: # Should be guaranteed non-empty by __init__ and startup logic
-            self.logger.error(
-                f"Server Misconfiguration: AuthMiddleware.expected_token is empty at dispatch for {request.url.path}."
-            )
+            self.logger.error(f"Auth ID {id(self)}: SERVER MISCONFIG (Expected Token Empty) for {request.url.path}.") # Enhanced
             return JSONResponse(
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
                 content={"detail": "Server Misconfiguration: Authorization system error."}
@@ -142,7 +152,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         auth_header = request.headers.get("Authorization")
         if not auth_header:
-            self.logger.warning(f"Unauthorized: Missing Authorization header for path {request.url.path}")
+            self.logger.warning(f"Auth ID {id(self)}: UNAUTHORIZED (Header Missing) for {request.url.path}.") # Enhanced
             return JSONResponse(
                 status_code=HTTPStatus.UNAUTHORIZED,
                 content={"detail": "Unauthorized: Missing Authorization header"}
@@ -150,7 +160,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         parts = auth_header.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
-            self.logger.warning(f"Unauthorized: Invalid Authorization header format for path {request.url.path}")
+            self.logger.warning(f"Auth ID {id(self)}: UNAUTHORIZED (Header Format Invalid) for {request.url.path}.") # Enhanced
             return JSONResponse(
                 status_code=HTTPStatus.UNAUTHORIZED,
                 content={"detail": "Unauthorized: Invalid Authorization header format. Expected 'Bearer <token>'."}
@@ -158,71 +168,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         token = parts[1]
         if not token: # Explicitly check if the client sent an empty token string
-            self.logger.warning(f"Unauthorized: Client provided an empty token for path {request.url.path}")
+            self.logger.warning(f"Auth ID {id(self)}: UNAUTHORIZED (Client Token Empty) for {request.url.path}.") # Enhanced
             return JSONResponse(
                 status_code=HTTPStatus.UNAUTHORIZED,
                 content={"detail": "Unauthorized: Client provided an empty token"}
             )
 
         if token != self.expected_token:
-            self.logger.warning(f"Unauthorized: Invalid token provided by client for path {request.url.path}")
+            self.logger.warning(f"Auth ID {id(self)}: UNAUTHORIZED (Token Mismatch) for {request.url.path}. Client token (snippet): '{token[:5]}...', Expected (snippet): '{self.expected_token[:5]}...'") # Enhanced
             return JSONResponse(
                 status_code=HTTPStatus.UNAUTHORIZED,
                 content={"detail": "Unauthorized: Invalid token"}
             )
 
-        self.logger.debug(f"Authorized: Token validated successfully for path {request.url.path}")
+        self.logger.info(f"Auth ID {id(self)}: AUTHORIZED for {request.url.path}.") # Added
         response = await call_next(request)
         return response
 
-# Wrapper for mcp.run to conditionally add AuthMiddleware
-def create_run_wrapper(original_run_method, mcp_instance):
-    logger_wrapper = logging.getLogger('weather_mcp.run_wrapper')
-
-    def wrapped_mcp_run(*args, **kwargs):
-        transport_mode = kwargs.get("transport")
-        logger_wrapper.info(f"Wrapped mcp.run called. Transport mode: {transport_mode}")
-
-        if transport_mode in ["sse", "streamable-http"]:
-            logger_wrapper.info(f"Enabling AuthMiddleware for {transport_mode} mode.")
-
-            actual_app = None
-            # FastMCP objects are often FastAPI apps themselves.
-            if isinstance(mcp_instance, FastAPI):
-                actual_app = mcp_instance
-            # Fallback: check if mcp_instance has an 'app' attribute that is a FastAPI app
-            elif hasattr(mcp_instance, 'app') and isinstance(mcp_instance.app, FastAPI):
-                actual_app = mcp_instance.app
-            # Fallback: check mcp_instance.servers (if it's a FastMCP multi-server setup)
-            elif hasattr(mcp_instance, 'servers'):
-                for server_name, server_obj in mcp_instance.servers.items():
-                    if hasattr(server_obj, 'app') and isinstance(server_obj.app, FastAPI):
-                        actual_app = server_obj.app
-                        logger_wrapper.info(f"Found FastAPI app in mcp.servers['{server_name}'].app")
-                        break
-
-            if not actual_app: # If no app found after checks
-                logger_wrapper.error("Auth wrapper: Could not find FastAPI app instance to attach middleware.")
-
-            if actual_app:
-                # Check if middleware already added
-                is_middleware_added = any(
-                    issubclass(middleware.cls, AuthMiddleware) for middleware in actual_app.user_middleware
-                )
-                if not is_middleware_added:
-                    mcp_base_path = getattr(mcp_instance, 'uri_prefix', '/mcp')
-                    actual_app.add_middleware(AuthMiddleware, expected_token=EXPECTED_TOKEN, mcp_base_path=mcp_base_path)
-                    logger_wrapper.info(f"AuthMiddleware added to FastAPI app instance. MCP Base Path: {mcp_base_path}")
-                else:
-                    logger_wrapper.info("AuthMiddleware already present in FastAPI app instance.")
-            # else: # Already logged error if actual_app is None
-            #    logger_wrapper.error("Auth wrapper: No FastAPI app instance found. Auth will not be active for HTTP transports.")
-        else:
-            logger_wrapper.info(f"Skipping AuthMiddleware for {transport_mode} mode.")
-
-        return original_run_method(*args, **kwargs)
-
-    return wrapped_mcp_run
+# create_run_wrapper function is removed. AuthMiddleware will be added directly.
 
 # Create main MCP server
 mcp = FastMCP(name="WeatherServer")
@@ -340,13 +303,7 @@ mcp.mount("weather", weather_mcp)
 
 
 if __name__ == "__main__":
-    # Patch mcp.run before it's called
-    if 'mcp' in globals() and isinstance(mcp, FastMCP):
-        original_mcp_run = mcp.run
-        mcp.run = create_run_wrapper(original_mcp_run, mcp)
-        logger.info("mcp.run has been wrapped for authorization.")
-    else:
-        logger.error("Failed to wrap mcp.run: mcp object not found or not a FastMCP instance.")
+    # The mcp.run wrapper is removed. Middleware is added directly below.
 
     # Log the raw value of the environment variable
     raw_mode = os.getenv('MCP_TRANSPORT_MODE')
@@ -357,6 +314,34 @@ if __name__ == "__main__":
     
     mode = mode.lower() if mode else 'stdio'
     logger.info(f"Starting server in {mode.upper()} mode")
+
+    # Directly add AuthMiddleware if mode is SSE or streamable-http
+    if mode in ["sse", "streamable-http"]:
+        if 'mcp' in globals() and isinstance(mcp, FastAPI):
+            # Ensure AuthMiddleware and EXPECTED_TOKEN are defined/imported before this point
+            mcp_base_path = getattr(mcp, 'uri_prefix', '/mcp')
+
+            # Check if middleware already added to prevent duplicates if this block were ever re-entered (though unlikely here)
+            is_middleware_added = any(
+                issubclass(middleware.cls, AuthMiddleware) for middleware in mcp.user_middleware
+            )
+            if not is_middleware_added:
+                logger.info(f"Attempting to add AuthMiddleware directly to FastMCP app instance for {mode} mode.")
+                mcp.add_middleware(
+                    AuthMiddleware,
+                    expected_token=EXPECTED_TOKEN,
+                    mcp_base_path=mcp_base_path
+                )
+                logger.info(f"AuthMiddleware directly ADDED to FastMCP instance. MCP Base Path: {mcp_base_path}")
+                logger.debug(f"FastMCP app middleware stack after adding AuthMiddleware: {mcp.user_middleware}")
+            else:
+                logger.info(f"AuthMiddleware already present in FastMCP instance for {mode} mode.")
+        else:
+            logger.error(f"Failed to add AuthMiddleware: 'mcp' object not found or not a FastAPI instance for {mode} mode.")
+    else:
+        logger.info(f"Skipping AuthMiddleware setup for {mode} mode.")
+
+    logger.info(f"Attempting to start server with mode: {mode}, Using mcp.run: {mcp.run}") # mcp.run is now the original
     
     try:
         if mode == 'sse':
