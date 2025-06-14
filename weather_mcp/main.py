@@ -2,24 +2,98 @@
 import os
 import logging
 from http import HTTPStatus
+import secrets # For placeholder if EXPECTED_TOKEN is empty
+import sys # For initial stdout logging
 
 # Third-party imports
 import yaml
 from fastmcp import FastMCP
 from fastmcp.resources import TextResource
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, HTTPException
-from starlette.middleware.base import BaseHTTPMiddleware # RequestResponseCallNext removed
-from starlette.responses import JSONResponse, Response # Added Response for type hint
-from typing import Callable # Added Callable
+from fastapi import FastAPI, Request, HTTPException # Added
+from starlette.middleware.base import BaseHTTPMiddleware # Added
+from starlette.responses import JSONResponse, Response # Added
+from typing import Callable # Added
 
 # Load environment variables from .env file if it exists
 load_dotenv()
 
-# Placeholder token for authorization
-EXPECTED_TOKEN = os.getenv("MCP_SHARED_SECRET", "your_secret_token")
-if EXPECTED_TOKEN == "your_secret_token":
-    logging.getLogger('weather_mcp').warning("Using default EXPECTED_TOKEN. Set MCP_SHARED_SECRET environment variable for production.")
+# Initial logging to STDOUT for early messages (e.g. critical token issues)
+_initial_log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+_initial_handlers = [logging.StreamHandler(sys.stdout)]
+logging.basicConfig(
+    level=getattr(logging, _initial_log_level, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=_initial_handlers,
+    force=True # Ensure these handlers are used
+)
+_startup_logger = logging.getLogger('weather_mcp.startup')
+
+# Define EXPECTED_TOKEN from MCP_SHARED_SECRET
+# Default to an empty string if not set, to explicitly check for this condition.
+EXPECTED_TOKEN = os.getenv("MCP_SHARED_SECRET", "")
+if not EXPECTED_TOKEN:
+    _startup_logger.critical(
+        "CRITICAL: MCP_SHARED_SECRET environment variable is not set or is empty. "
+        "For security, a random unmatchable token will be generated and used. "
+        "No client will be able to authenticate until MCP_SHARED_SECRET is properly configured."
+    )
+    EXPECTED_TOKEN = secrets.token_hex(32) # Generate a secure, random token
+
+# Main application logger - configured after initial checks and to a file
+# This will effectively replace the initial stdout basicConfig for subsequent logs.
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    filename='weather.log',
+    level=getattr(logging, log_level, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True # Replace initial basicConfig handlers
+)
+logger = logging.getLogger('weather_mcp') # Main application logger
+logger.info("Application logging configured to file.")
+
+
+# Load configuration - first try environment variables, then config.yaml
+apikey = os.getenv('OPENWEATHERMAP_API_KEY')
+default_city = os.getenv('DEFAULT_CITY')
+mode = os.getenv('MCP_TRANSPORT_MODE')
+
+# If environment variables are not set, try config.yaml
+if not all([apikey, default_city, mode]):
+    logger.info("Some configuration not found in environment variables, checking config.yaml")
+    config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+
+        # Only override if not already set from environment
+        if not apikey:
+            apikey = config.get('apikey')
+        if not default_city:
+            default_city = config.get('default_city')
+        if not mode:
+            mode = config.get('mode')
+    except FileNotFoundError:
+        logger.warning(f"Configuration file not found: {config_path}")
+    except Exception as e:
+        logger.warning(f"Error reading config file: {str(e)}")
+
+# Set defaults for any missing configuration
+if not apikey or apikey == 'YOUR_OPENWEATHERMAP_API_KEY' or apikey == 'your_api_key_here':
+    logger.warning("API key not set or using default value. Please set a valid OpenWeatherMap API key.")
+
+if not default_city:
+    default_city = 'Beijing,cn'
+    logger.info(f"Using default city: {default_city}")
+
+if not mode:
+    mode = 'stdio'
+    logger.info(f"Using default transport mode: {mode}")
+
+# Make config available to other modules
+from plugins.weather import set_config
+set_config(apikey, default_city)
+
 
 # Authorization Middleware
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -28,24 +102,44 @@ class AuthMiddleware(BaseHTTPMiddleware):
         self.expected_token = expected_token
         self.mcp_base_path = mcp_base_path
         self.logger = logging.getLogger('weather_mcp.AuthMiddleware')
-        # Define paths that should bypass authentication
+
+        # This check is a safeguard. The global EXPECTED_TOKEN is already handled at startup.
+        if not self.expected_token:
+            self.logger.critical(
+                "CRITICAL: AuthMiddleware initialized with an effectively empty expected_token. "
+                "This should have been caught by startup logic. Using a new random token."
+            )
+            # This ensures self.expected_token is definitely not empty for the middleware's lifetime
+            self.expected_token = secrets.token_hex(32)
+
+        self.logger.info(f"AuthMiddleware initialized. Bypass paths configured for base: {self.mcp_base_path}")
         self.bypass_paths = [
             f"{self.mcp_base_path}/health_check",
             f"{self.mcp_base_path}/info",
-            "/openapi.json",  # FastAPI docs
-            "/docs",          # FastAPI docs
-            "/docs/oauth2-redirect", # FastAPI docs
-            "/redoc"          # FastAPI docs
+            "/openapi.json",
+            "/docs",
+            "/docs/oauth2-redirect",
+            "/redoc"
         ]
-        self.logger.info(f"AuthMiddleware initialized. Bypass paths: {self.bypass_paths}")
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Check if current request path should bypass authentication
-        if request.url.path in self.bypass_paths or any(request.url.path.startswith(p_start) for p_start in ["/docs", "/redoc"]): # Handle subpaths of /docs
-            self.logger.debug(f"Bypassing auth for path: {request.url.path}")
+        if request.url.path in self.bypass_paths or \
+           any(request.url.path.startswith(p_start) for p_start in ["/docs", "/redoc"]):
+            self.logger.debug(f"Bypassing auth for exempt path: {request.url.path}")
             return await call_next(request)
 
         self.logger.debug(f"Applying auth for path: {request.url.path}")
+
+        # This is a critical safeguard. If server's token is empty here, it's a major issue.
+        if not self.expected_token: # Should be guaranteed non-empty by __init__ and startup logic
+            self.logger.error(
+                f"Server Misconfiguration: AuthMiddleware.expected_token is empty at dispatch for {request.url.path}."
+            )
+            return JSONResponse(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                content={"detail": "Server Misconfiguration: Authorization system error."}
+            )
+
         auth_header = request.headers.get("Authorization")
         if not auth_header:
             self.logger.warning(f"Unauthorized: Missing Authorization header for path {request.url.path}")
@@ -63,8 +157,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
 
         token = parts[1]
+        if not token: # Explicitly check if the client sent an empty token string
+            self.logger.warning(f"Unauthorized: Client provided an empty token for path {request.url.path}")
+            return JSONResponse(
+                status_code=HTTPStatus.UNAUTHORIZED,
+                content={"detail": "Unauthorized: Client provided an empty token"}
+            )
+
         if token != self.expected_token:
-            self.logger.warning(f"Unauthorized: Invalid token for path {request.url.path}")
+            self.logger.warning(f"Unauthorized: Invalid token provided by client for path {request.url.path}")
             return JSONResponse(
                 status_code=HTTPStatus.UNAUTHORIZED,
                 content={"detail": "Unauthorized: Invalid token"}
@@ -86,99 +187,42 @@ def create_run_wrapper(original_run_method, mcp_instance):
             logger_wrapper.info(f"Enabling AuthMiddleware for {transport_mode} mode.")
 
             actual_app = None
-            # FastMCP objects are FastAPI apps themselves.
+            # FastMCP objects are often FastAPI apps themselves.
             if isinstance(mcp_instance, FastAPI):
                 actual_app = mcp_instance
-            # TODO: The original thought about mcp_instance.app might be needed if FastMCP structure changes
-            # elif hasattr(mcp_instance, 'app') and isinstance(mcp_instance.app, FastAPI):
-            #     actual_app = mcp_instance.app
-            else:
-                logger_wrapper.warning("Auth wrapper: mcp_instance is not a FastAPI app. Cannot attach middleware directly to mcp_instance.")
-                # Attempt to find app in mcp_instance.servers if it exists (more robust for FastMCP structure)
-                if hasattr(mcp_instance, 'servers'):
-                    for server_name, server_obj in mcp_instance.servers.items():
-                        if hasattr(server_obj, 'app') and isinstance(server_obj.app, FastAPI):
-                            actual_app = server_obj.app
-                            logger_wrapper.info(f"Found FastAPI app in mcp.servers['{server_name}'].app")
-                            break
-                if not actual_app:
-                     logger_wrapper.error("Auth wrapper: Could not find FastAPI app instance to attach middleware.")
+            # Fallback: check if mcp_instance has an 'app' attribute that is a FastAPI app
+            elif hasattr(mcp_instance, 'app') and isinstance(mcp_instance.app, FastAPI):
+                actual_app = mcp_instance.app
+            # Fallback: check mcp_instance.servers (if it's a FastMCP multi-server setup)
+            elif hasattr(mcp_instance, 'servers'):
+                for server_name, server_obj in mcp_instance.servers.items():
+                    if hasattr(server_obj, 'app') and isinstance(server_obj.app, FastAPI):
+                        actual_app = server_obj.app
+                        logger_wrapper.info(f"Found FastAPI app in mcp.servers['{server_name}'].app")
+                        break
 
+            if not actual_app: # If no app found after checks
+                logger_wrapper.error("Auth wrapper: Could not find FastAPI app instance to attach middleware.")
 
             if actual_app:
-                # Check if middleware already added to prevent duplicates
-                # A more robust check would inspect actual_app.user_middleware list
+                # Check if middleware already added
                 is_middleware_added = any(
                     issubclass(middleware.cls, AuthMiddleware) for middleware in actual_app.user_middleware
                 )
-
                 if not is_middleware_added:
                     mcp_base_path = getattr(mcp_instance, 'uri_prefix', '/mcp')
                     actual_app.add_middleware(AuthMiddleware, expected_token=EXPECTED_TOKEN, mcp_base_path=mcp_base_path)
                     logger_wrapper.info(f"AuthMiddleware added to FastAPI app instance. MCP Base Path: {mcp_base_path}")
                 else:
                     logger_wrapper.info("AuthMiddleware already present in FastAPI app instance.")
-            else:
-                # This case should ideally not happen if FastMCP is used with http transports
-                 logger_wrapper.error("Auth wrapper: No FastAPI app instance found to attach AuthMiddleware. Auth will not be active for HTTP transports.")
-
-
+            # else: # Already logged error if actual_app is None
+            #    logger_wrapper.error("Auth wrapper: No FastAPI app instance found. Auth will not be active for HTTP transports.")
         else:
             logger_wrapper.info(f"Skipping AuthMiddleware for {transport_mode} mode.")
 
         return original_run_method(*args, **kwargs)
 
     return wrapped_mcp_run
-
-# Initialize logging
-log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
-logging.basicConfig(
-    filename='weather.log',
-    level=getattr(logging, log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger('weather_mcp')
-
-# Load configuration - first try environment variables, then config.yaml
-apikey = os.getenv('OPENWEATHERMAP_API_KEY')
-default_city = os.getenv('DEFAULT_CITY')
-mode = os.getenv('MCP_TRANSPORT_MODE')
-
-# If environment variables are not set, try config.yaml
-if not all([apikey, default_city, mode]):
-    logger.info("Some configuration not found in environment variables, checking config.yaml")
-    config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
-    try:
-        with open(config_path) as f:
-            config = yaml.safe_load(f)
-        
-        # Only override if not already set from environment
-        if not apikey:
-            apikey = config.get('apikey')
-        if not default_city:
-            default_city = config.get('default_city')
-        if not mode:
-            mode = config.get('mode')
-    except FileNotFoundError:
-        logger.warning(f"Configuration file not found: {config_path}")
-    except Exception as e:
-        logger.warning(f"Error reading config file: {str(e)}")
-
-# Set defaults for any missing configuration
-if not apikey or apikey == 'YOUR_OPENWEATHERMAP_API_KEY' or apikey == 'your_api_key_here':
-    logger.warning("API key not set or using default value. Please set a valid OpenWeatherMap API key.")
-    
-if not default_city:
-    default_city = 'Beijing,cn'
-    logger.info(f"Using default city: {default_city}")
-    
-if not mode:
-    mode = 'stdio'
-    logger.info(f"Using default transport mode: {mode}")
-    
-# Make config available to other modules
-from plugins.weather import set_config
-set_config(apikey, default_city)
 
 # Create main MCP server
 mcp = FastMCP(name="WeatherServer")
@@ -297,7 +341,6 @@ mcp.mount("weather", weather_mcp)
 
 if __name__ == "__main__":
     # Patch mcp.run before it's called
-    # Ensure mcp object (FastMCP instance) exists before patching
     if 'mcp' in globals() and isinstance(mcp, FastMCP):
         original_mcp_run = mcp.run
         mcp.run = create_run_wrapper(original_mcp_run, mcp)
@@ -322,22 +365,19 @@ if __name__ == "__main__":
             port = int(os.getenv('HTTP_PORT', os.getenv('SSE_PORT', '3399')))
             
             logger.info(f"Starting server with SSE transport at http://{host}:{port}")
-            # mcp.run is now the wrapped version
             mcp.run(transport="sse", host=host, port=port)
         elif mode == 'streamable-http':
             # Get host and port from environment or use defaults
             host = os.getenv('HTTP_HOST', '127.0.0.1')
             port = int(os.getenv('HTTP_PORT', '3399'))
-            # path = os.getenv('HTTP_PATH', '/mcp') # path argument for streamable-http in FastMCP is usually for the endpoint, not base path
+            path = os.getenv('HTTP_PATH', '/mcp')
             
-            # The base path for tools is typically configured in FastMCP (e.g. uri_prefix, default /mcp)
-            # The create_run_wrapper now tries to get mcp.uri_prefix for AuthMiddleware
-            logger.info(f"Starting server with streamable-http transport at http://{host}:{port}")
-            mcp.run(transport="streamable-http", host=host, port=port) # Removed path=path, assuming FastMCP handles its base path
+            logger.info(f"Starting server with streamable-http transport at http://{host}:{port}{path}")
+            mcp.run(transport="streamable-http", host=host, port=port, path=path)
         else:
             # Default to stdio mode
             logger.info("Starting server with stdio transport")
-            mcp.run(transport="stdio") # mcp.run is now the wrapped version
+            mcp.run(transport="stdio")
     except Exception as e:
         logger.error(f"Error during server startup: {str(e)}")
         print(f"Error during server startup: {str(e)}")
