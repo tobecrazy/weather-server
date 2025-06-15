@@ -344,7 +344,11 @@ python mcp_client/weather_mcp_client.py --host localhost --port 3397 --token you
 
 Or in a browser:
 ```javascript
-const eventSource = new EventSource('http://localhost:3397/stream');
+// For streamable-http mode
+const eventSource = new EventSource('http://localhost:3397/mcp/');
+
+// For SSE mode (legacy)
+const eventSource = new EventSource('http://localhost:3397/sse');
 ```
 
 ## Using the Weather Tool
@@ -437,6 +441,34 @@ The HTTP streaming transport mode uses the following components:
    - Clients send POST requests to this endpoint to execute MCP tools
    - Responses are sent back via the streaming connection
 
+### Authentication for Streamable-HTTP Mode
+
+The server supports OAuth 2.0 Bearer Token authentication for the streamable-http transport mode, similar to the SSE mode. This provides secure access control for your MCP server when using the streamable-http transport.
+
+When using the streamable-http transport with authentication enabled:
+
+1. Clients must include a valid Bearer Token in the Authorization header for all requests
+2. The server will validate the token for each request
+3. Requests without a valid token will receive a 401 Unauthorized response
+
+**Important Note**: The streamable-http transport uses the `/mcp/` endpoint for streaming connections, not the `/stream` endpoint.
+
+Example using curl:
+
+```bash
+curl -H "Accept: text/event-stream" -H "Authorization: Bearer your_token_here" http://localhost:3399/mcp/
+```
+
+Example using JavaScript:
+
+```javascript
+const eventSource = new EventSource('http://localhost:3399/mcp/', {
+  headers: {
+    'Authorization': 'Bearer your_token_here'
+  }
+});
+```
+
 ### Using the HTTP Streaming Mode
 
 To connect to the HTTP streaming server:
@@ -447,8 +479,15 @@ When connecting directly to the MCP server (without the auth proxy):
 
 1. Establish a streaming connection:
    ```javascript
-   // Browser example
-   const eventSource = new EventSource('http://localhost:3399/stream');
+   // Browser example for streamable-http mode
+   const eventSource = new EventSource('http://localhost:3399/mcp/');
+   eventSource.onmessage = (event) => {
+     const data = JSON.parse(event.data);
+     console.log('Received:', data);
+   };
+   
+   // Browser example for SSE mode (legacy)
+   const eventSource = new EventSource('http://localhost:3399/sse');
    eventSource.onmessage = (event) => {
      const data = JSON.parse(event.data);
      console.log('Received:', data);
@@ -482,8 +521,15 @@ When connecting through the authentication proxy (recommended):
 
 1. Establish a streaming connection:
    ```javascript
-   // Browser example
-   const eventSource = new EventSource('http://localhost:3397/stream');
+   // Browser example for streamable-http mode
+   const eventSource = new EventSource('http://localhost:3397/mcp/');
+   eventSource.onmessage = (event) => {
+     const data = JSON.parse(event.data);
+     console.log('Received:', data);
+   };
+   
+   // Browser example for SSE mode (legacy)
+   const eventSource = new EventSource('http://localhost:3397/sse');
    eventSource.onmessage = (event) => {
      const data = JSON.parse(event.data);
      console.log('Received:', data);

@@ -12,7 +12,9 @@ from weather_mcp.utils.auth import generate_token
 
 async def main():
     parser = argparse.ArgumentParser(description="Weather MCP Client")
-    parser.add_argument("--url", default="http://localhost:3397/sse", help="MCP server URL")
+    parser.add_argument("--host", default="localhost", help="MCP server host")
+    parser.add_argument("--port", default="3397", help="MCP server port")
+    parser.add_argument("--mode", default="stream", choices=["sse", "stream"], help="Connection mode (sse or stream)")
     parser.add_argument("--city", default=None, help="City for weather query")
     parser.add_argument("--days", type=int, default=0, help="Days offset (0=today, 1=tomorrow, etc.)")
     parser.add_argument("--token", help="Bearer token for authentication")
@@ -30,8 +32,16 @@ async def main():
         headers["Authorization"] = f"Bearer {token}"
         print(f"Generated token: {token}")
     
+    # Construct the URL based on host, port, and mode
+    if args.mode == "stream":
+        # For streamable-http mode, use the /mcp/ endpoint
+        url = f"http://{args.host}:{args.port}/mcp/"
+    else:
+        # For SSE mode, use the /sse endpoint
+        url = f"http://{args.host}:{args.port}/sse"
+    
     # Connect to the server
-    print(f"Connecting to {args.url}")
+    print(f"Connecting to {url}")
     
     # Create a custom session with headers
     session = aiohttp.ClientSession(headers=headers)
@@ -39,10 +49,10 @@ async def main():
     # Connect using the custom session
     try:
         # Try with session parameter first (newer versions of fastmcp)
-        client = Client(args.url, session=session)
+        client = Client(url, session=session)
     except TypeError:
         # Fall back to older versions of fastmcp
-        client = Client(args.url)
+        client = Client(url)
         client._session = session
     
     async with client:
