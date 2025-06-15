@@ -18,13 +18,12 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-# Add parent directory to path to import auth module
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from weather_mcp.utils.auth import validate_token, get_token_from_request
+# Import auth module directly since we're in the Docker container
+from utils.auth import validate_token, get_token_from_request
 
 # Initialize logging
 logging.basicConfig(
-    filename='auth_proxy.log',
+    filename='/var/log/supervisor/auth_proxy.log',
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
@@ -40,7 +39,7 @@ auth_secret_key = os.getenv('AUTH_SECRET_KEY')
 # If environment variables are not set, try config.yaml
 if not auth_secret_key:
     logger.info("Auth secret key not found in environment variables, checking config.yaml")
-    config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+    config_path = '/app/config.yaml'  # Direct path in Docker container
     try:
         with open(config_path) as f:
             config = yaml.safe_load(f)
