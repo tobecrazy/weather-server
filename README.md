@@ -1,10 +1,12 @@
 # Weather Server MCP
 
 A Model Context Protocol (MCP) server that provides weather information via the OpenWeatherMap API. This project demonstrates how to create and use MCP servers to extend AI assistant capabilities with real-time weather data.
+![Example](https://github.com/tobecrazy/weather-server/blob/develop/weather_mcp/images/w1.png)
 
 ## Project Overview
 
 This project implements a local MCP server using FastMCP that allows AI assistants to access current weather conditions and forecasts for any city worldwide. The server connects to the OpenWeatherMap API and provides this data through a standardized MCP interface.
+![Overview](https://github.com/tobecrazy/weather-server/blob/develop/weather_mcp/images/w2.png)
 
 ### Key Features
 
@@ -38,6 +40,7 @@ weather-server/
     └── README.md              # Detailed documentation for the MCP server
 ```
 
+![Instructure](https://github.com/tobecrazy/weather-server/blob/develop/weather_mcp/images/w3.png)
 ## Quick Start
 
 ### Prerequisites

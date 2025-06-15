@@ -374,14 +374,33 @@ if __name__ == "__main__":
             path = os.getenv('HTTP_PATH', '/mcp')
             
             logger.info(f"Starting server with streamable-http transport at http://{host}:{port}{path}")
+            logger.info(f"Stream endpoint will be available at http://{host}:{port}/mcp")
             
-            # Authentication is handled by the same middleware as SSE transport
+            # Add authentication for streamable-http transport
             if auth_enabled:
-                logger.info("Authentication for streamable-http transport is handled by the same middleware as SSE transport")
+                logger.info("Setting up authentication for streamable-http transport")
                 
-            # Use "sse" transport for "streamable-http" mode since FastMCP doesn't support "streamable-http" directly
-            logger.info("Using 'sse' transport for 'streamable-http' mode")
-            mcp.run(transport="streamable-http", host=host, port=port, path=path)
+                try:
+                    # Import the transport classes
+                    from fastmcp.transports.streamable_http import StreamableHttpTransport
+                    from utils.auth_transport import AuthenticatedStreamableHttpTransport
+                    
+                    # Create a custom transport with authentication
+                    transport = StreamableHttpTransport(host=host, port=port, path=path)
+                    auth_transport = AuthenticatedStreamableHttpTransport(transport, auth_secret_key)
+                    
+                    # Run with the authenticated transport
+                    logger.info("Running with authenticated streamable-http transport")
+                    mcp.run(transport=auth_transport)
+                except Exception as e:
+                    logger.error(f"Failed to set up authenticated streamable-http transport: {str(e)}")
+                    logger.warning("Falling back to standard streamable-http transport without authentication")
+                    logger.warning("This is a security vulnerability that needs to be fixed")
+                    mcp.run(transport="streamable-http", host=host, port=port, path=path)
+            else:
+                # Run with standard transport
+                logger.info("Authentication is disabled, using standard streamable-http transport")
+                mcp.run(transport="streamable-http", host=host, port=port, path=path)
         else:
             # Default to stdio mode
             logger.info("Starting server with stdio transport")
