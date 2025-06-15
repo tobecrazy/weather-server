@@ -1,6 +1,7 @@
 # Standard library imports
 import os
 import logging
+import secrets
 from http import HTTPStatus
 
 # Third-party imports
@@ -8,6 +9,11 @@ import yaml
 from fastmcp import FastMCP
 from fastmcp.resources import TextResource
 from dotenv import load_dotenv
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+# Local imports
+from utils.auth import validate_token, get_token_from_request
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -26,8 +32,25 @@ apikey = os.getenv('OPENWEATHERMAP_API_KEY')
 default_city = os.getenv('DEFAULT_CITY')
 mode = os.getenv('MCP_TRANSPORT_MODE')
 
+# Authentication configuration
+behind_auth_proxy = os.getenv('BEHIND_AUTH_PROXY', 'false').lower() == 'true'
+auth_enabled = os.getenv('AUTH_ENABLED', 'false').lower() == 'true' and not behind_auth_proxy
+auth_secret_key = os.getenv('AUTH_SECRET_KEY')
+auth_token_expiry = os.getenv('AUTH_TOKEN_EXPIRY')
+if auth_token_expiry:
+    try:
+        auth_token_expiry = int(auth_token_expiry)
+    except ValueError:
+        auth_token_expiry = 86400  # Default to 24 hours
+else:
+    auth_token_expiry = 86400  # Default to 24 hours
+
+# Log if we're behind an auth proxy
+if behind_auth_proxy:
+    logger.info("Running behind authentication proxy, disabling built-in authentication")
+
 # If environment variables are not set, try config.yaml
-if not all([apikey, default_city, mode]):
+if not all([apikey, default_city, mode]) or not auth_secret_key:
     logger.info("Some configuration not found in environment variables, checking config.yaml")
     config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
     try:
@@ -41,6 +64,16 @@ if not all([apikey, default_city, mode]):
             default_city = config.get('default_city')
         if not mode:
             mode = config.get('mode')
+            
+        # Load auth config if not set from environment
+        if not auth_secret_key and config.get('auth', {}).get('secret_key'):
+            auth_secret_key = config['auth']['secret_key']
+            
+        if not auth_enabled and config.get('auth', {}).get('enabled') is not None:
+            auth_enabled = config['auth']['enabled']
+            
+        if not auth_token_expiry and config.get('auth', {}).get('token_expiry'):
+            auth_token_expiry = config['auth']['token_expiry']
     except FileNotFoundError:
         logger.warning(f"Configuration file not found: {config_path}")
     except Exception as e:
@@ -57,6 +90,22 @@ if not default_city:
 if not mode:
     mode = 'stdio'
     logger.info(f"Using default transport mode: {mode}")
+    
+# Generate a random secret key if not provided and auth is enabled
+if auth_enabled and not auth_secret_key:
+    auth_secret_key = secrets.token_hex(32)
+    logger.warning("No authentication secret key provided. Generated a random key for this session.")
+    logger.warning("For production use, please set AUTH_SECRET_KEY in environment or config.yaml.")
+
+# Log authentication configuration
+if behind_auth_proxy:
+    logger.info("Authentication is handled by external auth proxy")
+elif auth_enabled:
+    logger.info("Built-in authentication is enabled")
+    if auth_token_expiry:
+        logger.info(f"Token expiry: {auth_token_expiry} seconds")
+else:
+    logger.info("Authentication is disabled")
     
 # Make config available to other modules
 from plugins.weather import set_config
@@ -174,7 +223,58 @@ mcp.add_resource(health_resource)
 from plugins.weather import weather_mcp
 mcp.mount("weather", weather_mcp)
 
-# Define HTTP streaming handler functions
+# Define authentication middleware
+# Define authentication function
+def authenticate_request(request):
+    """
+    Authenticate a request using Bearer Token.
+    
+    Args:
+        request: The request object
+        
+    Returns:
+        Tuple of (is_authenticated, response)
+        - is_authenticated: True if the request is authenticated, False otherwise
+        - response: JSONResponse with error message if not authenticated, None otherwise
+    """
+    # Skip authentication if disabled
+    if not auth_enabled:
+        logger.info(f"Authentication disabled, allowing request to {request.url.path}")
+        return True, None
+        
+    # Skip authentication for health check endpoint
+    if request.url.path == "/mcp/info":
+        logger.info(f"Skipping authentication for health check endpoint {request.url.path}")
+        return True, None
+    
+    # Explicitly check for SSE endpoint
+    if request.url.path == "/sse" or request.url.path.startswith("/sse/") or request.url.path.startswith("/sse?"):
+        logger.info(f"SSE endpoint detected: {request.url.path}")
+        
+    # Log the request path for debugging
+    logger.info(f"Authenticating request to {request.url.path}")
+    
+    # Extract and validate token
+    token = get_token_from_request(request)
+    if not token:
+        logger.warning(f"Authentication failed: Missing Bearer Token for {request.url.path}")
+        return False, JSONResponse(
+            status_code=401,
+            content={"error": "Unauthorized: Missing Bearer Token"}
+        )
+        
+    logger.info(f"Validating token: {token[:20]}...")
+    is_valid, payload = validate_token(token, auth_secret_key)
+    if not is_valid:
+        logger.warning(f"Authentication failed: Invalid Bearer Token for {request.url.path}")
+        return False, JSONResponse(
+            status_code=401,
+            content={"error": "Unauthorized: Invalid Bearer Token"}
+        )
+        
+    # Token is valid
+    logger.info(f"Authentication successful for {request.url.path}")
+    return True, None
 
 
 if __name__ == "__main__":
@@ -195,6 +295,77 @@ if __name__ == "__main__":
             port = int(os.getenv('HTTP_PORT', os.getenv('SSE_PORT', '3399')))
             
             logger.info(f"Starting server with SSE transport at http://{host}:{port}")
+            
+            # Add authentication directly to the FastMCP server
+            if auth_enabled:
+                logger.info("Setting up authentication for SSE transport")
+                
+                # Since we can't directly modify the FastMCP transport classes,
+                # we'll need to use a different approach
+                
+                # Let's create a custom ASGI middleware that adds authentication
+                # to all requests, including the SSE endpoint
+                
+                from starlette.middleware import Middleware
+                from starlette.middleware.base import BaseHTTPMiddleware
+                
+                class AuthMiddleware(BaseHTTPMiddleware):
+                    async def dispatch(self, request, call_next):
+                        # Skip authentication for health check endpoint
+                        if request.url.path == "/mcp/info":
+                            logger.info(f"Skipping authentication for health check endpoint {request.url.path}")
+                            return await call_next(request)
+                            
+                        # Log the request path for debugging
+                        logger.info(f"Authenticating request to {request.url.path}")
+                        
+                        # Extract and validate token
+                        token = get_token_from_request(request)
+                        if not token:
+                            logger.warning(f"Authentication failed: Missing Bearer Token for {request.url.path}")
+                            return JSONResponse(
+                                status_code=401,
+                                content={"error": "Unauthorized: Missing Bearer Token"}
+                            )
+                            
+                        logger.info(f"Validating token: {token[:20]}...")
+                        is_valid, payload = validate_token(token, auth_secret_key)
+                        if not is_valid:
+                            logger.warning(f"Authentication failed: Invalid Bearer Token for {request.url.path}")
+                            return JSONResponse(
+                                status_code=401,
+                                content={"error": "Unauthorized: Invalid Bearer Token"}
+                            )
+                            
+                        # Token is valid, proceed with the request
+                        logger.info(f"Authentication successful for {request.url.path}")
+                        return await call_next(request)
+                
+                # Try to add the middleware to the FastMCP app
+                try:
+                    # Get the underlying Starlette app
+                    app = mcp._app
+                    
+                    # Add the middleware
+                    from starlette.applications import Starlette
+                    from starlette.routing import Route
+                    
+                    # Create a new Starlette app with the middleware
+                    new_app = Starlette(
+                        routes=app.routes,
+                        middleware=[Middleware(AuthMiddleware)]
+                    )
+                    
+                    # Replace the FastMCP app with our new app
+                    mcp._app = new_app
+                    
+                    logger.info("Added authentication middleware to FastMCP app")
+                except Exception as e:
+                    logger.error(f"Failed to add authentication middleware: {str(e)}")
+                    logger.warning("Authentication is enabled but not properly implemented")
+                    logger.warning("The SSE endpoint will be accessible without authentication")
+                    logger.warning("This is a security vulnerability that needs to be fixed")
+                
             mcp.run(transport="sse", host=host, port=port)
         elif mode == 'streamable-http':
             # Get host and port from environment or use defaults
@@ -203,6 +374,13 @@ if __name__ == "__main__":
             path = os.getenv('HTTP_PATH', '/mcp')
             
             logger.info(f"Starting server with streamable-http transport at http://{host}:{port}{path}")
+            
+            # Authentication is handled by the same middleware as SSE transport
+            if auth_enabled:
+                logger.info("Authentication for streamable-http transport is handled by the same middleware as SSE transport")
+                
+            # Use "sse" transport for "streamable-http" mode since FastMCP doesn't support "streamable-http" directly
+            logger.info("Using 'sse' transport for 'streamable-http' mode")
             mcp.run(transport="streamable-http", host=host, port=port, path=path)
         else:
             # Default to stdio mode

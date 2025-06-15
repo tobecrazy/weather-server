@@ -9,6 +9,7 @@ This project implements a local MCP (Model Context Protocol) server using FastMC
 - Includes minimum and maximum temperature data for each forecast
 - Configurable default city and API key
 - Support for both stdio and HTTP transport modes with streaming support
+- OAuth 2.0 Bearer Token authentication for HTTP modes
 - Comprehensive error handling and logging
 
 ## Project Structure
@@ -16,10 +17,18 @@ This project implements a local MCP (Model Context Protocol) server using FastMC
 ```
 weather_mcp/
 ├── main.py                 # Main server entrypoint using FastMCP
+├── auth_proxy.py           # Authentication proxy for the MCP server
 ├── plugins/
 │   └── weather.py          # Weather tool (queries OpenWeatherMap API)
+├── utils/
+│   ├── auth.py             # Authentication utilities
+│   └── generate_token.py   # Token generation utility
 ├── config.yaml             # Configuration (API key, mode, default city)
 ├── requirements.txt        # Python dependencies
+├── supervisord.conf        # Supervisor configuration for Docker
+├── run_server.sh           # Script to run the server
+├── Dockerfile              # Docker configuration
+├── docker-compose.yml      # Docker Compose configuration
 └── weather.log             # Log file (created at runtime)
 ```
 
@@ -50,6 +59,12 @@ weather_mcp/
    apikey: YOUR_OPENWEATHERMAP_API_KEY
    mode: stdio  # or "sse" for HTTP streaming mode
    default_city: Beijing,cn
+   
+   # Authentication settings (optional)
+   auth:
+     enabled: true
+     secret_key: your_secret_key_here
+     token_expiry: 86400  # 24 hours in seconds
    ```
 
    ### Option 2: Using Environment Variables
@@ -65,6 +80,11 @@ weather_mcp/
    export OPENWEATHERMAP_API_KEY=your_api_key_here
    export MCP_TRANSPORT_MODE=stdio
    export DEFAULT_CITY=London,uk
+   
+   # Authentication settings (optional)
+   export AUTH_ENABLED=true
+   export AUTH_SECRET_KEY=your_secret_key_here
+   export AUTH_TOKEN_EXPIRY=86400
    ```
 
 ## Running the Server
@@ -85,6 +105,15 @@ chmod +x run_server.sh
 
 # Run in HTTP streaming mode with custom port
 ./run_server.sh -m sse -p 8080
+
+# Run with authentication enabled
+./run_server.sh -m sse -a
+
+# Run with authentication and generate a token
+./run_server.sh -m sse -a -g
+
+# Run with authentication and a specific secret key
+./run_server.sh -m sse -a -s your_secret_key_here
 
 # Show help
 ./run_server.sh --help
@@ -132,7 +161,11 @@ docker-compose down
 ```
 
 **Health Check:**
-The Docker configurations (`Dockerfile` and `docker-compose.yml`) define a health check to monitor the server's status. This health check now utilizes a GET request to the `/mcp/info` endpoint (accessible at `http://localhost:3399/mcp/info` if the container's port 3399 is mapped to the host's port 3399). This endpoint returns a JSON response confirming the service is operational.
+The Docker configurations (`Dockerfile` and `docker-compose.yml`) define a health check to monitor the server's status. This health check utilizes a GET request to the `/mcp/info` endpoint through the auth proxy (accessible at `http://localhost:3397/mcp/info` if the container's port 3397 is mapped to the host's port 3397). This endpoint returns a JSON response confirming the service is operational.
+
+**Ports:**
+- Port 3397: Auth proxy (exposed to clients)
+- Port 3399: MCP server (internal, not directly accessible)
 
 #### Using Docker directly:
 
@@ -153,6 +186,165 @@ docker run -d --name weather-mcp-server \
   -e SSE_HOST=0.0.0.0 \
   -p 3399:3399 \
   weather-mcp-server
+  
+# Run with authentication enabled
+docker run -d --name weather-mcp-server \
+  -e OPENWEATHERMAP_API_KEY=your_api_key_here \
+  -e MCP_TRANSPORT_MODE=sse \
+  -e HTTP_HOST=0.0.0.0 \
+  -e SSE_HOST=0.0.0.0 \
+  -e AUTH_ENABLED=true \
+  -e AUTH_SECRET_KEY=your_secret_key_here \
+  -e AUTH_PROXY_HOST=0.0.0.0 \
+  -e AUTH_PROXY_PORT=3397 \
+  -p 3397:3397 \
+  -p 3399:3399 \
+  weather-mcp-server
+```
+
+Note: When running with Docker, both the MCP server and auth proxy are started automatically using supervisor.
+
+## Authentication
+
+The server supports OAuth 2.0 Bearer Token authentication for HTTP streaming modes (SSE and streamable-http). This provides secure access control for your MCP server.
+
+### Authentication Configuration
+
+Authentication can be configured in several ways:
+
+1. **Using config.yaml**:
+   ```yaml
+   auth:
+     enabled: true                   # Enable or disable authentication
+     secret_key: your_secret_key_here # Secret key for signing tokens
+     token_expiry: 86400             # Token expiration time in seconds (24 hours)
+   ```
+
+2. **Using environment variables**:
+   ```bash
+   AUTH_ENABLED=true
+   AUTH_SECRET_KEY=your_secret_key_here
+   AUTH_TOKEN_EXPIRY=86400
+   ```
+
+3. **Using command-line options** (with run_server.sh):
+   ```bash
+   ./run_server.sh -m sse -a -s your_secret_key_here
+   ```
+
+### Token Generation
+
+The project includes a token generation utility in `utils/generate_token.py`:
+
+```bash
+# Basic usage
+python utils/generate_token.py --secret your_secret_key_here
+
+# With user ID
+python utils/generate_token.py --secret your_secret_key_here --user "user123"
+
+# With custom expiration (in seconds)
+python utils/generate_token.py --secret your_secret_key_here --expiry 3600
+
+# With additional data (as JSON)
+python utils/generate_token.py --secret your_secret_key_here --data '{"role":"admin"}'
+```
+
+You can also generate a token when starting the server with the `-g` flag:
+
+```bash
+./run_server.sh -m sse -a -g
+```
+
+### Token Format
+
+The Bearer Token follows a simple format:
+
+```
+base64url(payload).base64url(signature)
+```
+
+Where:
+- `payload` is a JSON object containing token metadata (issue time, expiration, etc.)
+- `signature` is an HMAC-SHA256 signature of the payload using the secret key
+
+### Client Authentication
+
+Clients must include the Bearer Token in the Authorization header:
+
+```
+Authorization: Bearer your_token_here
+```
+
+Example using the provided client:
+
+```bash
+python mcp_client/weather_mcp_client.py --token your_token_here
+```
+
+Or generate a token on the fly:
+
+```bash
+python mcp_client/weather_mcp_client.py --secret your_secret_key_here
+```
+
+### Security Considerations
+
+- The secret key should be kept secure and not shared publicly
+- For production use, use a strong random key (at least 32 characters)
+- Token expiration limits the window of opportunity for token misuse
+- Authentication is enforced for all endpoints except the health check endpoint (/mcp/info)
+
+## Authentication Proxy
+
+The server includes an authentication proxy (`auth_proxy.py`) that sits in front of the MCP server and handles authentication. This allows you to expose the MCP server to external clients while ensuring all requests are properly authenticated.
+
+### Authentication Proxy Features
+
+- Handles authentication for all requests to the MCP server
+- Forwards authenticated requests to the MCP server
+- Exposes a separate port (3397) for client connections
+- Uses the same authentication mechanism as the MCP server
+- Allows the MCP server to focus on its core functionality
+
+### Running with the Authentication Proxy
+
+You can run the server with the authentication proxy using the provided script:
+
+```bash
+# Run with auth proxy enabled
+./run_server.sh --proxy
+
+# Run with auth proxy on a custom port
+./run_server.sh --proxy --proxy-port 8080
+
+# Run with auth proxy and authentication enabled
+./run_server.sh --proxy -a -s your_secret_key_here
+```
+
+### Using Docker with Authentication Proxy
+
+When using Docker, the authentication proxy is automatically enabled:
+
+```bash
+# Start the server with Docker Compose
+docker-compose up -d
+```
+
+The Docker setup runs both the MCP server and the authentication proxy, with the proxy exposed on port 3397 and the MCP server running internally on port 3399.
+
+### Client Configuration
+
+When using the authentication proxy, clients should connect to the proxy port (3397 by default) instead of the MCP server port (3399):
+
+```bash
+# Using the provided client with the auth proxy
+python mcp_client/weather_mcp_client.py --host localhost --port 3397 --token your_token_here
+```
+
+Or in a browser:
+```javascript
+const eventSource = new EventSource('http://localhost:3397/stream');
 ```
 
 ## Using the Weather Tool
@@ -249,6 +441,10 @@ The HTTP streaming transport mode uses the following components:
 
 To connect to the HTTP streaming server:
 
+#### Direct Connection (Port 3399)
+
+When connecting directly to the MCP server (without the auth proxy):
+
 1. Establish a streaming connection:
    ```javascript
    // Browser example
@@ -267,7 +463,43 @@ To connect to the HTTP streaming server:
      method: 'POST',
      headers: {
        'Content-Type': 'application/json',
-       'X-Client-ID': clientId
+       'X-Client-ID': clientId,
+       'Authorization': 'Bearer your_token_here' // If authentication is enabled
+     },
+     body: JSON.stringify({
+       tool: 'weather.get_weather',
+       args: {
+         city: 'London,uk'
+       },
+       request_id: '12345' // Optional, will be generated if not provided
+     })
+   });
+   ```
+
+#### Through Auth Proxy (Port 3397)
+
+When connecting through the authentication proxy (recommended):
+
+1. Establish a streaming connection:
+   ```javascript
+   // Browser example
+   const eventSource = new EventSource('http://localhost:3397/stream');
+   eventSource.onmessage = (event) => {
+     const data = JSON.parse(event.data);
+     console.log('Received:', data);
+   };
+   ```
+
+2. Send MCP requests:
+   ```javascript
+   // Browser example
+   const clientId = '...'; // Get this from the streaming connection headers
+   fetch('http://localhost:3397/mcp', {
+     method: 'POST',
+     headers: {
+       'Content-Type': 'application/json',
+       'X-Client-ID': clientId,
+       'Authorization': 'Bearer your_token_here' // Required when using auth proxy
      },
      body: JSON.stringify({
        tool: 'weather.get_weather',

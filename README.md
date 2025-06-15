@@ -12,6 +12,7 @@ This project implements a local MCP server using FastMCP that allows AI assistan
 - **Weather Forecasts**: Get forecasts for up to 15 days in the future
 - **Temperature Data**: Includes current, minimum, and maximum temperatures
 - **Multiple Transport Modes**: Supports both stdio and HTTP streaming modes
+- **OAuth 2.0 Authentication**: Secure Bearer Token authentication for HTTP modes
 - **Docker Support**: Easy deployment with Docker and Docker Compose
 - **Comprehensive Error Handling**: Robust error handling and logging
 
@@ -82,6 +83,9 @@ chmod +x run_server.sh
 
 # Run in HTTP streaming mode
 ./run_server.sh -m sse
+
+# Run with authentication enabled
+./run_server.sh -m sse -a -g
 ```
 
 #### Using Docker:
@@ -93,6 +97,67 @@ docker-compose up -d
 # Or build and run the Docker image directly
 docker build -t weather-mcp-server .
 docker run -d -p 3399:3399 -e OPENWEATHERMAP_API_KEY=your_api_key_here weather-mcp-server
+```
+
+## Authentication
+
+The server supports OAuth 2.0 Bearer Token authentication for HTTP streaming modes (SSE and streamable-http). This provides secure access control for your MCP server.
+
+### Enabling Authentication
+
+Authentication can be enabled in several ways:
+
+1. **Using environment variables**:
+   ```bash
+   export AUTH_ENABLED=true
+   export AUTH_SECRET_KEY=your_secret_key_here
+   ```
+
+2. **Using the .env file**:
+   ```
+   AUTH_ENABLED=true
+   AUTH_SECRET_KEY=your_secret_key_here
+   ```
+
+3. **Using config.yaml**:
+   ```yaml
+   auth:
+     enabled: true
+     secret_key: your_secret_key_here
+   ```
+
+4. **Using command-line options** (with run_server.sh):
+   ```bash
+   ./run_server.sh -m sse -a -s your_secret_key_here
+   ```
+
+### Generating Tokens
+
+The project includes a token generation utility:
+
+```bash
+# Generate a token using the secret key
+python weather_mcp/utils/generate_token.py --secret your_secret_key_here
+
+# Generate a token with a specific expiration time (in seconds)
+python weather_mcp/utils/generate_token.py --secret your_secret_key_here --expiry 3600
+
+# Generate a token for a specific user
+python weather_mcp/utils/generate_token.py --secret your_secret_key_here --user "user123"
+```
+
+You can also generate a token when starting the server:
+
+```bash
+./run_server.sh -m sse -a -g
+```
+
+### Using Tokens with Clients
+
+Clients must include the Bearer Token in the Authorization header:
+
+```
+Authorization: Bearer your_token_here
 ```
 
 ## Using with AI Assistants
