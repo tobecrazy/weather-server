@@ -22,11 +22,31 @@ import uvicorn
 from utils.auth import validate_token, get_token_from_request
 
 # Initialize logging
-logging.basicConfig(
-    filename='/var/log/supervisor/auth_proxy.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Check if we're running in a Docker container
+in_docker = os.path.exists('/.dockerenv') or os.environ.get('DOCKER_CONTAINER') == 'true'
+
+# Set log file path based on environment
+if in_docker:
+    log_file = '/var/log/supervisor/auth_proxy.log'
+else:
+    # Use a local log file when running outside Docker
+    log_file = 'auth_proxy.log'
+
+# Configure logging
+try:
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+except (FileNotFoundError, PermissionError):
+    # Fallback to console logging if file logging fails
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    print(f"Warning: Could not write to log file {log_file}, logging to console instead")
+
 logger = logging.getLogger('auth_proxy')
 
 # Load environment variables from .env file if it exists
@@ -39,7 +59,15 @@ auth_secret_key = os.getenv('AUTH_SECRET_KEY')
 # If environment variables are not set, try config.yaml
 if not auth_secret_key:
     logger.info("Auth secret key not found in environment variables, checking config.yaml")
-    config_path = '/app/config.yaml'  # Direct path in Docker container
+    
+    # Set config path based on environment
+    if in_docker:
+        config_path = '/app/config.yaml'  # Direct path in Docker container
+    else:
+        # Use a relative path when running outside Docker
+        config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+    
+    logger.info(f"Looking for config file at: {config_path}")
     try:
         with open(config_path) as f:
             config = yaml.safe_load(f)
@@ -152,18 +180,35 @@ async def proxy_sse(request: Request):
         logger.error(f"Error proxying SSE: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error proxying SSE: {str(e)}")
 
-@app.get("/stream", dependencies=[Depends(authenticate)])
+@app.api_route("/mcp", methods=["GET", "POST"], dependencies=[Depends(authenticate)])
 async def proxy_stream(request: Request):
     """Proxy the streamable-http endpoint with authentication."""
+    logger.info(f"Proxying streamable-http request to /mcp with method {request.method}")
     try:
-        # Forward the request to the actual MCP server
-        response = requests.get(
-            "http://localhost:3399/stream",
+        # Log the request headers for debugging
+        logger.info(f"Request headers: {request.headers}")
+        
+        # Forward the request to the actual MCP server using the same method
+        logger.info(f"Forwarding {request.method} request to http://localhost:3399/mcp")
+        
+        # Get request body if any
+        body = await request.body()
+        
+        # Forward the request using the same method as the incoming request
+        response = requests.request(
+            method=request.method,
+            url="http://localhost:3399/mcp",
             headers=dict(request.headers),
+            data=body,
             stream=True
         )
         
+        # Log the response status and headers for debugging
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response headers: {response.headers}")
+        
         # Return a streaming response
+        logger.info(f"Returning streaming response")
         return StreamingResponse(
             content=response.iter_content(chunk_size=1024),
             status_code=response.status_code,
@@ -171,6 +216,7 @@ async def proxy_stream(request: Request):
         )
     except Exception as e:
         logger.error(f"Error proxying stream: {str(e)}")
+        logger.exception("Exception details:")
         raise HTTPException(status_code=500, detail=f"Error proxying stream: {str(e)}")
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"], dependencies=[Depends(authenticate)])
