@@ -11,14 +11,23 @@ services:
       - HTTP_PORT=3399
       - SSE_HOST=0.0.0.0  # Legacy settings for backward compatibility
       - SSE_PORT=3399
+      - AUTH_PROXY_HOST=0.0.0.0  # Auth proxy settings
+      - AUTH_PROXY_PORT=3397
+      - BEHIND_AUTH_PROXY=true  # Indicate that we're running behind an auth proxy
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Authentication settings
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-your_secret_key_here}
+      - AUTH_TOKEN_EXPIRY=${AUTH_TOKEN_EXPIRY:-86400}
     ports:
-      - "3399:3399"  # Map container port to host
+      - "3399:3399"  # Map MCP server port to host
+      - "3397:3397"  # Map Auth proxy port to host
     volumes:
       - ./weather.log:/app/weather.log  # Persist logs
+      - ./auth_proxy.log:/app/auth_proxy.log  # Persist auth proxy logs
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3399/mcp/info"]
+      test: ["CMD", "curl", "-f", "http://localhost:3397/mcp/info"]
       interval: 30s
       timeout: 3s
       retries: 3

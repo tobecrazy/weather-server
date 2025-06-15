@@ -13,3 +13,15 @@ port: 3399
 # Default city to use when no city is specified in requests
 # Format: City name, optionally with country code (e.g., "London,uk")
 default_city: Beijing,cn
+
+# Authentication settings
+auth:
+  # Enable or disable authentication
+  enabled: true
+  
+  # Secret key used to sign and validate tokens
+  # For production, use a strong random key
+  secret_key: Bearer eyJpYXQiOiAxNzQ5OTE1NDMwLCAianRpIjogIjIxNWJlZGM0ZGMxNDRkZDg3N2EwOWY0YTkzYjlhN2E4IiwgImV4cCI6IDE3NTAwMDE4MzB9.8_FauQi0pTh57rPjMAly8AtE92j2AgcyQI_MuhvQqqM
+  
+  # Token expiration time in seconds (default: 86400 = 24 hours)
+  token_expiry: 86400
