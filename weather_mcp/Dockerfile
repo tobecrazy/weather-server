@@ -17,7 +17,7 @@ RUN mkdir -p /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Default to streamable-http mode, can be overridden at runtime
-ENV MCP_TRANSPORT_MODE=sse
+ENV MCP_TRANSPORT_MODE=streamable-http
 ENV DEFAULT_CITY=Beijing,cn
 ENV HTTP_HOST=0.0.0.0
 ENV HTTP_PORT=3399

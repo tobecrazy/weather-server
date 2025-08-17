@@ -7,7 +7,7 @@ apikey: your api key
 #   - stdio: Standard input/output mode (default, good for CLI usage)
 #   - sse: HTTP server mode with streaming support (recommended for web clients)
 #   - streamable-http: Alias for sse mode (for backward compatibility)
-mode: sse
+mode: streamable-http
 port: 3399
 
 # Default city to use when no city is specified in requests
